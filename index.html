@@ -149,7 +149,7 @@ body::after{display:none!important}
     box.style.cssText='position:fixed;z-index:2147483647;inset:8px;background:#fff;color:#111;padding:16px;border:3px solid #c22;border-radius:10px;overflow:auto;font:14px/1.5 monospace;white-space:pre-wrap';
     (document.body||document.documentElement).appendChild(box);
    }
-   box.textContent='APP STARTUP ERROR\\n\\n'+String(message||'Unknown error')+(source?'\\nSource: '+source:'')+(line?'\\nLine: '+line+(col?':'+col:''):'')+'\\n\\nCopy this text to diagnose the failure.';
+   box.textContent='APP STARTUP ERROR\n\n'+String(message||'Unknown error')+(source?'\nSource: '+source:'')+(line?'\nLine: '+line+(col?':'+col:''):'')+'\n\nCopy this text to diagnose the failure.';
   }catch(ignore){}
  }
  window.addEventListener('error',function(e){report(e.message||e.error,e.filename,e.lineno,e.colno)},true);
