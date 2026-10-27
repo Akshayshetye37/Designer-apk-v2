@@ -204,6 +204,13 @@ body::after{display:none!important}
 @media(max-width:390px){.ca-period,.ca-actions{grid-template-columns:1fr}}
 #ci,#co{min-width:0;max-width:100%}
 input[type=date]{max-width:100%;min-width:0}
+</style><style>
+/* Home availability controls: never clip the Check suites action on mobile */
+.avail{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(78px,auto)!important;align-items:end;gap:10px!important;width:100%;min-width:0;box-sizing:border-box}
+.avail>div{min-width:0;width:100%}
+.avail input[type=date]{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;font-size:clamp(12px,3.6vw,16px);padding-left:6px;padding-right:2px}
+.avail>.btn{display:flex;align-items:center;justify-content:center;width:100%;min-width:78px;max-width:100%;min-height:54px;padding:8px 10px;white-space:normal;line-height:1.15;overflow-wrap:anywhere}
+@media(max-width:430px){.avail{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:8px!important}.avail>.btn{grid-column:1/-1;min-width:0;width:100%;min-height:46px}.avail label{font-size:13px}.avail input[type=date]{font-size:13px}}
 </style></head><body>
 
 <script id="aurelia-safe-storage">
