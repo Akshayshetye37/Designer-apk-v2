@@ -2614,7 +2614,7 @@ V.stays=function(){
  let html=_staysFinalPolish();
  html=html.replace('<div class="chips">','<div class="chips stays-filters">');
  html=html.replace(/<button class="chip" onclick="S\.f='cal';render\(\)">Calendar<\/button>/g,'<button class="chip" data-filter="calendar" onclick="S.f=\'cal\';render()">Calendar</button><button class="chip" data-filter="cancelled" onclick="S.tab=\'more\';S.sub=\'cancelbookings\';render()">Cancelled<br>bookings</button>');
- html=html.replace(/<div class="row" style="margin-top:14px;flex-wrap:wrap"><span class="lab">([\s\S]*?)<\/span><span style="display:flex;gap:6px">/g,'<div class="stays-card-actions"><span class="lab">$1</span><span class="stays-card-actions">');
+
  // Ensure all contact action sets occupy a full grid row.
  html=html.replace(/<span class="guest-contact-actions">/g,'<span class="guest-contact-actions">');
  return html;
