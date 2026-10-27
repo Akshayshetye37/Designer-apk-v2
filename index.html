@@ -138,6 +138,25 @@ body::after{display:none!important}
 .ad-slot.banner{max-width:100%}
 </style>
 </head><body>
+<script id="aurelia-early-error-capture">
+/* Install before the application scripts: capture synchronous startup errors. */
+(function(){
+ function report(message,source,line,col){
+  try{
+   var box=document.getElementById('aurelia-startup-error');
+   if(!box){
+    box=document.createElement('div');box.id='aurelia-startup-error';
+    box.style.cssText='position:fixed;z-index:2147483647;inset:8px;background:#fff;color:#111;padding:16px;border:3px solid #c22;border-radius:10px;overflow:auto;font:14px/1.5 monospace;white-space:pre-wrap';
+    (document.body||document.documentElement).appendChild(box);
+   }
+   box.textContent='APP STARTUP ERROR\\n\\n'+String(message||'Unknown error')+(source?'\\nSource: '+source:'')+(line?'\\nLine: '+line+(col?':'+col:''):'')+'\\n\\nCopy this text to diagnose the failure.';
+  }catch(ignore){}
+ }
+ window.addEventListener('error',function(e){report(e.message||e.error,e.filename,e.lineno,e.colno)},true);
+ window.addEventListener('unhandledrejection',function(e){report(e.reason&&e.reason.stack||e.reason||'Unhandled promise rejection')});
+ window.__aureliaReportStartupError=report;
+})();
+</script>
 
 <script id="aurelia-safe-storage">
 (function(){
