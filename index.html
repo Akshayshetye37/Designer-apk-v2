@@ -1,7 +1,7 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8" />
-<meta name="theme-color" content="#05110d" /><meta name="mobile-web-app-capable" content="yes" /><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" /><meta name="description" content="Aurelia PMS is a hotel property management system for reservations, stays, room operations, guest records, invoices, and financial reporting." /><meta property="og:title" content="Aurelia PMS — Hotel Property Management" /><meta property="og:description" content="Manage hotel reservations, guests, rooms, invoices, and financial reporting with Aurelia PMS." /><meta name="twitter:card" content="summary" />
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="theme-color" content="#05110d"><meta name="mobile-web-app-capable" content="yes"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Aurelia PMS</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" /><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root{color-scheme:dark;--bg:#081711;--s1:#10271d;--s2:#173628;--ln:rgba(220,194,133,.24);--gold:#e2c783;--gold2:#a98443;--tx:#f7f2e7;--mu:#afc0b5;--em:#52c79a;--rb:#df7c70;--am:#edbb5d;
 --serif:"Cormorant Garamond",Georgia,serif;--sans:Jost,system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -73,7 +73,7 @@ h2{font-size:26px;margin-bottom:12px}h3{font-size:21px}
 .menu{display:grid;gap:10px}
 .mi{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 0;text-align:left;width:100%;position:relative;overflow:hidden;border-bottom:1px dotted var(--ln)}
 .mi b{font:500 20px var(--serif)}.mi span{color:var(--gold)}
-.mi:active{background:rgba(220,194,133,0.1)}
+.mi:active{background:rgba(217,183,110,.1)}
 .dock{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;display:grid;grid-template-columns:repeat(5,1fr);width:min(440px,calc(100% - 28px));padding:6px;border-radius:26px;background:rgba(8,26,19,.7);backdrop-filter:blur(22px) saturate(1.4);border:1px solid var(--ln);box-shadow:0 20px 50px #000a}
 .dock::before{content:"";position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/5);border-radius:20px;background:linear-gradient(160deg,rgba(217,183,110,.28),rgba(217,183,110,.08));box-shadow:inset 0 0 0 1px var(--ln),0 0 24px rgba(217,183,110,.25);transform:translateX(calc(var(--i)*100%));transition:transform .55s cubic-bezier(.3,1.4,.4,1)}
 .dock button{position:relative;display:grid;justify-items:center;gap:2px;padding:9px 0 7px;font-size:12px;color:var(--mu);border-radius:20px;overflow:hidden;transition:color .3s}
@@ -138,25 +138,6 @@ body::after{display:none!important}
 .ad-slot.banner{max-width:100%}
 </style>
 </head><body>
-<script id="aurelia-early-error-capture">
-/* Install before the application scripts: capture synchronous startup errors. */
-(function(){
- function report(message,source,line,col){
-  try{
-   var box=document.getElementById('aurelia-startup-error');
-   if(!box){
-    box=document.createElement('div');box.id='aurelia-startup-error';
-    box.style.cssText='position:fixed;z-index:2147483647;inset:8px;background:#fff;color:#111;padding:16px;border:3px solid #c22;border-radius:10px;overflow:auto;font:14px/1.5 monospace;white-space:pre-wrap';
-    (document.body||document.documentElement).appendChild(box);
-   }
-   box.textContent='APP STARTUP ERROR\n\n'+String(message||'Unknown error')+(source?'\nSource: '+source:'')+(line?'\nLine: '+line+(col?':'+col:''):'')+'\n\nCopy this text to diagnose the failure.';
-  }catch(ignore){}
- }
- window.addEventListener('error',function(e){report(e.message||e.error,e.filename,e.lineno,e.colno)},true);
- window.addEventListener('unhandledrejection',function(e){report(e.reason&&e.reason.stack||e.reason||'Unhandled promise rejection')});
- window.__aureliaReportStartupError=report;
-})();
-</script>
 
 <script id="aurelia-safe-storage">
 (function(){
@@ -466,7 +447,7 @@ const gOf=n=>S.g.find(g=>g.n===n),paid=b=>(b.pays||[]).reduce((a,x)=>a+x.a,0),ca
 const lines=b=>[[`Room ${b.room} · ${nts(b)} night${nts(b)>1?'s':''}`,nts(b)*(rm(b.room)||{r:0}).r],...b.ch];
 const ask=(t,m,l,c)=>openS(`<h2 class="foil">${t}</h2><p class="lab">${m}</p><div class="row"><button class="btn ghost sm" onclick="closeS()">Keep it</button><button class="btn sm" onclick="closeS();${c}">${l}</button></div>`);
 const syncT=()=>{types.length=0;const m=new Map();S.rooms.forEach(r=>{if(!m.has(r.t))m.set(r.t,r.r)});m.forEach((r,t)=>types.push([t,r]))};
-const free=(n,a,z,ex)=>!S.b.some(b=>b.id!==ex&&b.room===n&&b.st!=='done'&&b.st!=='cancelled'&&b.in<z&&b.out>a);
+const free=(n,a,z,ex)=>!S.b.some(b=>b.id!==ex&&b.room===n&&b.st!=='done'&&b.in<z&&b.out>a);
 const idMissing=g=>{if(!g)return'the guest profile is missing';if(!g.idn||!g.img)return'the primary guest has no ID photo or number';const o=(g.occ||[]).findIndex(x=>!x.idn||!x.img);return o>=0?`occupant ${o+1} has no ID photo or number`:''};
 function brand(){const s=S.set;document.title=s.name;$('#crest').innerHTML=(s.logo?`<img src="${s.logo}" alt="" style="width:34px;height:34px;border-radius:10px;object-fit:cover">`:'<svg viewBox="0 0 32 32"><path d="M16 3l3 7 7 1-5 5 1 8-6-4-6 4 1-8-5-5 7-1z"/></svg>')+`<span class="foil">${esc(s.name.toUpperCase())}</span>`}
 /* payments */
@@ -528,7 +509,7 @@ const t=$('#actual-checkin-time')?.value||b.checkInTime||defCheckInTime();if(!t)
 const r=rm(b.room);if(r&&r.s!=='ready'&&b.st!=='in'){toast('Room '+b.room+' is not ready yet');return}
 b.checkInTime=t;b.actualCheckInAt=new Date().toISOString();b.actualCheckInDate=new Date().toISOString().slice(0,10);
 b.st='in';if(r)r.s='occ';persist();closeS();render();toast(b.g+' checked in at '+t);aud('Check-in',b.g+' · Room '+b.room+' · '+t)}
-function cxl(i){const b=bk(i);if(!b)return;if(b.st==='cancelled'){toast('This booking is already cancelled');return}b.cancelledFromStatus=b.st;b.cancelledAt=new Date().toISOString();b.cancelPaidAmount=Math.max(0,Number(b.p)||Number(paid(b))||0);b.cancelDecision='';b.st='cancelled';aud('Reservation cancelled',b.g+' · Room '+b.room+' · Amount paid '+K(b.cancelPaidAmount));persist();render();toast('Booking moved to Cancelled. Choose Refund or No refund.')}
+function cxl(i){const b=bk(i);S.b.splice(S.b.indexOf(b),1);aud('Reservation cancelled',b.g+' · Room '+b.room);render();toast('Reservation cancelled')}
 V.stays=()=>{if(S.f==='cal')return cal();const F={all:'All',res:'Arriving',in:'In house',done:'Departed'},l=S.b.filter(b=>S.f==='all'||b.st===S.f);return`<h2 style="margin-top:6px;font-size:36px">Stays</h2><div class="chips">${Object.entries(F).map(([k,v])=>`<button class="chip ${S.f===k?'on':''}" onclick="S.f='${k}';render()">${v}</button>`).join('')}<button class="chip" onclick="S.f='cal';render()">Calendar</button></div><div class="grid">${l.map(b=>{const g=gOf(b.g),r=rm(b.room)||{t:''};return`<div class="card"><div class="row"><div><h3>${esc(b.g)}</h3><div class="lab">Room ${b.room} · ${r.t} · ${nts(b)} night${nts(b)>1?'s':''}</div></div><span class="tag ${b.st==='in'?'occ':b.st==='res'?'clean':'ready'}">${{in:'In house',res:'Arriving',done:'Departed'}[b.st]}</span></div><div class="row" style="margin-top:14px;flex-wrap:wrap"><span class="lab">${fd(b.in)} to ${fd(b.out)}${idMissing(g)?' · ID incomplete':''}</span><span style="display:flex;gap:6px">${b.st==='res'?`<button class="btn sm ghost" onclick="ask('Cancel reservation','This frees the suite for ${esc(b.g)}’s dates.','Cancel it','cxl(${b.id})')">Cancel</button><button class="btn sm" onclick="cin(${b.id})">Check in</button>`:b.st==='in'?`<button class="btn sm ghost" onclick="folio(${b.id})">Folio</button><button class="btn sm" onclick="outB(${b.id})">Check out</button>`:`<button class="btn sm ghost" onclick="inv(${b.id})">Invoice</button>`}</span></div></div>`}).join('')||'<div class="empty">Nothing here yet. Add a reservation below.</div>'}</div><button class="btn fab" onclick="resv()">New reservation</button>`};
 /* rooms */
 V.rooms=()=>`<div class="row"><h2 style="margin-top:6px;font-size:36px">Rooms</h2><button class="btn sm" onclick="roomNew()">Add room</button></div>${S.rooms.length?`<div class="rooms">${S.rooms.map((r,i)=>{const b=S.b.find(b=>b.room===r.n&&b.st==='in');return`<div class="card room" onclick="roomS(${i})"><div class="row"><span class="n">${esc(r.n)}</span><span class="tag ${r.s}">${{ready:'Ready',occ:'Occupied',clean:'Cleaning',out:'Out of service'}[r.s]}</span></div><div class="lab">${esc(r.t)}</div><div style="margin-top:6px;color:var(--gold)">${K(r.r)} a night</div><div class="lab" style="margin-top:8px;min-height:22px">${b?esc(b.g):'&nbsp;'}</div></div>`}).join('')}</div>`:'<div class="empty">No rooms yet. Add your first room.</div>'}`;
@@ -1016,7 +997,8 @@ function importXlsxFile(input){
 }
 function commitXlsxImport(rows){
  let added=0,skipped=0;
- rows.forEach(x=>{  const room=rm(x.room);if(!room){skipped++;return}
+ rows.forEach(x=>{
+  const room=rm(x.room);if(!room){skipped++;return}
   if(S.b.some(b=>String(b.g||'').toLowerCase()===x.g.toLowerCase()&&String(b.room)===x.room&&b.in===x.inn&&b.out===x.out)){skipped++;return}
   const b={id:++id,g:x.g,room:x.room,in:x.inn,out:x.out,st:x.st==='in'||(x.inn<=0&&x.out>0)?'in':'res',ch:[],p:0,pays:[],oc:[],veh:[],checkInTime:x.checkInTime||'14:00',checkOutTime:x.checkOutTime||'11:00',scheduledCheckIn:ymd(x.inn)+'T'+(x.checkInTime||'14:00'),scheduledCheckOut:ymd(x.out)+'T'+(x.checkOutTime||'11:00')};
   if(x.phone)b.ph=x.phone;if(x.email)b.email=x.email;if(x.idType)b.idt=x.idType;if(x.idNumber)b.idn=x.idNumber;
@@ -1538,6 +1520,7 @@ selectFolioPaymentMethod=function(method){
  }
 };
 </script>
+
 <script>
 
 /* ===== Runtime fixes: guest occupants, invoices, availability, exports, dining data ===== */
@@ -2014,7 +1997,8 @@ dsave=function(){
   const it=$('#dIT')?.value,ot=$('#dOT')?.value;
   if(!it||!ot){toast('Select check-in and check-out times');return}
   S.dr.checkInTime=it;S.dr.checkOutTime=ot;
- } _dsaveFinal();
+ }
+ _dsaveFinal();
 };
 /* Explicit time prompts at actual check-in and check-out, with mandatory time validation. */
 const _cinFinal=cin;
@@ -2202,6 +2186,7 @@ V.dining=function(){
  document.head.appendChild(css);
 })();
 </script>
+
 <script>
 /* Final NaN repair: preserve valid saved categories, sanitize both menu stores, and use one category source. */
 function repairMenu(menu){
@@ -2505,170 +2490,5 @@ V.stays=function(){
 .rc-scroll{overflow-x:auto;border:1px solid rgba(220,198,133,.22);border-radius:18px;background:rgba(0,0,0,.11)}.rc-table{width:100%;min-width:680px;border-collapse:separate;border-spacing:0;font-size:11px}.rc-table th,.rc-table td{border-right:1px solid rgba(220,198,133,.1);border-bottom:1px solid rgba(220,198,133,.1);padding:0;text-align:center}.rc-table thead th{height:54px;background:rgba(220,198,133,.06);color:#b9c6bc;font-weight:500}.rc-table thead th span,.rc-table thead th strong{display:block}.rc-table thead th strong{font-size:14px;color:#f1dfb1;margin-top:3px}.rc-table .rc-room{position:sticky;left:0;z-index:2;min-width:82px;text-align:left;padding:10px;background:#123628;color:#f1dfb1}.rc-room strong,.rc-room small{display:block}.rc-room small{color:#9fb1a5;font-size:10px;font-weight:400;margin-top:4px}.rc-table td{height:56px;min-width:42px;cursor:pointer;transition:background .15s}.rc-table td:last-child,.rc-table th:last-child{border-right:0}.rc-table tr:last-child td,.rc-table tr:last-child th{border-bottom:0}.rc-table .rc-empty{background:rgba(255,255,255,.012)}.rc-table .rc-empty:active{background:rgba(220,198,133,.18)}.rc-table .rc-cell{padding:4px 3px}.rc-table .rc-cell span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:76px;margin:auto;color:#fff1d0;font-weight:600}.rc-table .rc-cell small{display:block;font-size:9px;margin-top:4px;color:#e2d2a9}.rc-table .rc-cell.inhouse{background:linear-gradient(145deg,rgba(214,183,105,.38),rgba(214,183,105,.13));box-shadow:inset 0 0 0 1px rgba(231,205,135,.3)}.rc-table .rc-cell.reserved{background:linear-gradient(145deg,rgba(163,115,62,.35),rgba(163,115,62,.12))}.rc-foot{font-size:11px;line-height:1.55;color:#9fb1a5;margin-top:14px}
 @media(max-width:480px){.rc-wrap{padding:14px;border-radius:22px}.rc-heading h2{font-size:25px}.rc-heading p{max-width:270px}.rc-toolbar{padding:8px}.rc-toolbar .btn{padding:9px 10px}.rc-range{font-size:11px}.rc-new{font-size:12px}}
 </style>
-
-<script>
-/* Stays alignment, recoverable calendar navigation, cancellation ledger, and accounting links. */
-(function(){
- const style=document.createElement('style');
- style.id='aurelia-stays-cancellation-fix';
- style.textContent =
- '.stays-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:stretch;margin-top:14px}' +
- '.stays-grid>.card{display:flex;flex-direction:column;min-width:0;min-height:178px;padding:18px}' +
- '.stays-grid>.card>.row:first-child{align-items:flex-start;gap:12px;min-height:54px}' +
- '.stays-grid>.card>.row:first-child>div{min-width:0;flex:1}' +
- '.stays-grid>.card h3{overflow-wrap:anywhere;line-height:1.15}' +
- '.stays-grid>.card .tag{flex:none;white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis}' +
- '.stays-grid>.card>.row[style*="margin-top:14px"]{margin-top:auto!important;padding-top:14px;align-items:flex-end;gap:10px}' +
- '.stays-grid>.card>.row[style*="margin-top:14px"]>span:first-child{min-width:0;flex:1;line-height:1.45}' +
- '.stays-grid>.card>.row[style*="margin-top:14px"]>span:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px;min-width:0}' +
- '.stays-grid .btn{min-height:38px;padding:9px 12px;white-space:nowrap}' +
- '.stay-extra-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px}' +
- '.stay-extra-tabs .chip{min-height:40px;display:inline-flex;align-items:center;justify-content:center}' +
- '.cancelled-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:stretch;margin-top:14px}' +
- '.cancelled-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:18px}' +
- '.cancelled-card .cc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}' +
- '.cancelled-card .cc-name{min-width:0;overflow-wrap:anywhere;font:500 23px/1.15 var(--serif)}' +
- '.cancelled-card .cc-meta{font-size:13px;color:var(--mu);line-height:1.55}' +
- '.cancelled-card .cc-amount{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--ln);border-bottom:1px solid var(--ln)}' +
- '.cancelled-card .cc-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}' +
- '.cancelled-card .cc-actions .btn{flex:1 1 110px;min-height:42px}' +
- '.cancelled-card .cc-actions .btn.selected{outline:2px solid var(--gold);outline-offset:2px}' +
- '.cancelled-card .cc-decision{font-size:12px;color:var(--mu);line-height:1.5}' +
- '.rc-nav{display:flex;justify-content:flex-start;margin:0 0 12px}' +
- '.rc-wrap{min-width:0;overflow:hidden}' +
- '.rc-heading{align-items:center;gap:12px;flex-wrap:wrap}' +
- '.rc-heading>div{min-width:0;flex:1}' +
- '.rc-toolbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px}' +
- '.rc-range{text-align:center;overflow-wrap:anywhere}' +
- '.rc-scroll{max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch}' +
- '@media(max-width:640px){.stays-grid,.cancelled-grid{grid-template-columns:minmax(0,1fr)}.stays-grid>.card,.cancelled-card{min-height:0}.stays-grid>.card>.row[style*="margin-top:14px"]{align-items:flex-start}.stays-grid>.card>.row[style*="margin-top:14px"]>span:last-child{justify-content:flex-start}.rc-heading{align-items:flex-start}.rc-new{max-width:100%}.rc-toolbar{grid-template-columns:auto minmax(0,1fr) auto;gap:6px}.rc-toolbar .btn{padding:8px 9px}.rc-range{font-size:11px}}' +
- '@media(max-width:380px){.stays-grid>.card,.cancelled-card{padding:14px}.stays-grid .btn{padding:8px 10px;font-size:12px}.cancelled-card .cc-name{font-size:21px}}';
- document.head.appendChild(style);
-})();
-
-function cancellationTotals(){
- const list=(S.b||[]).filter(function(b){return b.st==='cancelled'});
- const amount=function(b){return Math.max(0,Number(b.cancelPaidAmount!=null?b.cancelPaidAmount:(Number(b.p)||Number(paid(b))||0))||0)};
- return {
-  list:list,
-  refunds:list.filter(function(b){return b.cancelDecision==='refund'}).reduce(function(a,b){return a+amount(b)},0),
-  retained:list.filter(function(b){return b.cancelDecision==='no_refund'}).reduce(function(a,b){return a+amount(b)},0),
-  pending:list.filter(function(b){return b.cancelDecision!=='refund'&&b.cancelDecision!=='no_refund'}).length,
-  deposits:list.reduce(function(a,b){return a+amount(b)},0),
-  amount:amount
- };
-}
-function setCancellationDecision(i,decision){
- const b=bk(Number(i));if(!b||b.st!=='cancelled'){toast('Cancelled booking not found');return}
- if(decision!=='refund'&&decision!=='no_refund')return;
- b.cancelDecision=decision;
- b.cancelDecisionAt=new Date().toISOString();
- b.cancelRefundAmount=decision==='refund'?cancellationTotals().amount(b):0;
- b.cancelRetainedAmount=decision==='no_refund'?cancellationTotals().amount(b):0;
- aud(decision==='refund'?'Cancellation refund selected':'Cancellation marked no refund',b.g+' · Room '+b.room+' · '+K(cancellationTotals().amount(b)));
- persist();render();
- toast(decision==='refund'?'Refund decision saved; include it in the financial reports.':'No-refund decision saved; retained amount will be included in operating income.');
-}
-function renderCancelledBookings(){
- const c=cancellationTotals();
- const cards=c.list.slice().sort(function(a,b){return String(b.cancelledAt||'').localeCompare(String(a.cancelledAt||''))}).map(function(b){
-  const amount=c.amount(b),choice=b.cancelDecision||'',status=choice==='refund'?'Refund selected':choice==='no_refund'?'No refund · retained':'Decision required';
-  return '<article class="card cancelled-card"><div class="cc-head"><div><div class="cc-name">'+esc(b.g||'Guest')+'</div><div class="cc-meta">Room '+esc(String(b.room))+' · '+esc(fd(b.in))+' to '+esc(fd(b.out))+'</div></div><span class="tag out">Cancelled</span></div><div class="cc-meta">Cancelled '+esc(b.cancelledAt?new Date(b.cancelledAt).toLocaleDateString():'date unavailable')+'</div><div class="cc-amount"><span class="lab">Amount previously paid</span><strong>'+esc(K(amount))+'</strong></div><div class="cc-actions"><button class="btn '+(choice==='refund'?'selected':'')+'" onclick="setCancellationDecision('+Number(b.id)+',\'refund\')">Refund</button><button class="btn ghost '+(choice==='no_refund'?'selected':'')+'" onclick="setCancellationDecision('+Number(b.id)+',\'no_refund\')">No refund</button></div><div class="cc-decision">Accounting decision: <strong>'+esc(status)+'</strong>'+(choice==='refund'?' · Tracked as refund adjustment in P&amp;L.':choice==='no_refund'?' · Tracked as retained cancellation income in P&amp;L.':' · Select one option; reports will show the unresolved decision.')+'</div></article>';
- }).join('');
- return '<h2 style="margin-top:6px;font-size:36px">Cancelled bookings</h2><p class="lab">Cancelled reservations stay here for audit history. Choose Refund or No refund for each booking. Decisions are saved on this device and included in financial exports.</p><div class="grid g4" style="margin-top:14px"><div class="card"><div class="lab">Cancelled bookings</div><div class="k">'+c.list.length+'</div></div><div class="card"><div class="lab">Refunds selected</div><div class="k">'+esc(K(c.refunds))+'</div></div><div class="card"><div class="lab">No refund · retained</div><div class="k">'+esc(K(c.retained))+'</div></div><div class="card"><div class="lab">Decisions pending</div><div class="k">'+c.pending+'</div></div></div><div class="cancelled-grid">'+(cards||'<div class="empty">No cancelled bookings yet. Cancel a reservation from the Stays section and it will appear here.</div>')+'</div><div class="card" style="margin-top:14px"><h3>Cancellation accounting</h3><div class="lab" style="margin-top:6px">Refund decisions increase the tracked refund adjustment. No-refund decisions recognise the paid amount as retained cancellation income. The export reports these as separate adjustments; reconcile them against actual payments and your accountant’s ledger before filing.</div><button class="btn" style="margin-top:12px" onclick="exportHotelFinancialStatements()">Export P&amp;L + Balance Sheet CSV</button><button class="btn ghost" style="margin:12px 0 0 8px" onclick="exportBalanceSheet()">Export Balance Sheet Summary CSV</button></div>';
-}
-
-/* Preserve the existing stay cards but align them and add a permanent Cancelled tab. */
-const _staysBeforeCancellationFix=V.stays;
-V.stays=function(){
- if(S.f==='cal')return cal();
- if(S.f==='cancelled')return renderCancelledBookings();
- let html=_staysBeforeCancellationFix();
- html=html.replace('<div class="grid">','<div class="grid stays-grid">');
- const tab='<button class="chip '+(S.f==='cancelled'?'on':'')+'" onclick="S.f=\'cancelled\';render()">Cancelled ('+cancellationTotals().list.length+')</button>';
- const pos=html.indexOf('<div class="chips">');
- if(pos>=0){const end=html.indexOf('</div>',pos);if(end>=0&&!html.slice(pos,end).includes('>Cancelled'))html=html.slice(0,end)+tab+html.slice(end);}
- else html='<div class="chips">'+tab+'</div>'+html;
- return html;
-};
-
-/* The calendar has an explicit route back to Stays, so it cannot trap the user. */
-const _calendarBeforeBackButton=cal;
-cal=function(){
- const html=_calendarBeforeBackButton();
- const back='<div class="rc-nav"><button class="btn sm ghost" onclick="S.f=\'all\';render()">← Back to stays</button><button class="btn sm ghost" onclick="S.f=\'cancelled\';render()">Cancelled bookings</button></div>';
- return html.replace('<header class="rc-heading">',back+'<header class="rc-heading">');
-};
-
-/* Cancellation decisions flow into P&L totals without deleting the original booking history. */
-const _exportFinancialStatementsBeforeCancellation=exportHotelFinancialStatements;
-exportHotelFinancialStatements=function(){
- const c=cancellationTotals(),oldBookings=S.b,oldFin=S.financials;
- const base=Object.assign({},oldFin||{});
- const n=function(k){return Math.max(0,Number(base[k])||0)};
- const active=oldBookings.filter(function(b){return b.st!=='cancelled'});
- S.b=active;
- S.financials=Object.assign({},base,{
-  otherOperatingIncome:n('otherOperatingIncome')+c.retained,
-  miscExpenses:n('miscExpenses')+c.refunds
- });
- try{_exportFinancialStatementsBeforeCancellation()}
- finally{S.b=oldBookings;S.financials=oldFin}
-};
-
-/* Cancellation-aware management balance-sheet export, with separate, auditable totals. */
-exportBalanceSheet=function(){
- const c=cancellationTotals(),active=(S.b||[]).filter(function(b){return b.st!=='cancelled'});
- const expenses=(S.exp||[]).filter(function(e){return !e.v}).reduce(function(a,e){return a+(Number(e.a)||0)},0);
- const roomRevenue=active.reduce(function(a,b){return a+(Number(tt(b))||0)},0);
- const roomPaid=active.reduce(function(a,b){return a+(Number(paid(b))||0)},0);
- const roomDue=active.reduce(function(a,b){return a+Math.max(0,Number(dueB(b))||0)},0);
- const restaurant=(S.sales||[]).reduce(function(a,s){return a+(Number(s.a)||0)},0);
- const netCollections=roomPaid+restaurant+c.retained-c.refunds;
- const rows=[
-  ['Aurelia PMS — Balance Sheet / Management Summary'],
-  ['Generated at',new Date().toISOString()],
-  ['Metric','Amount ('+(S.set&&S.set.cur||'INR')+')'],
-  ['Active room revenue',roomRevenue],['Active room payments recorded',roomPaid],['Outstanding active room balances',roomDue],
-  ['Restaurant sales recorded',restaurant],['Expenses (active)',expenses],['Net recorded collections after cancellation decisions',netCollections],
-  ['Cancelled bookings',c.list.length],['Cancellation deposits recorded',c.deposits],['Refunds selected',c.refunds],['No-refund amounts retained',c.retained],['Cancellation decisions pending',c.pending],
-  ['Cancellation net cash adjustment (retained minus refund selected)',c.retained-c.refunds],
-  ['Rooms',S.rooms.length],['Active bookings',active.length],['Guest profiles',S.g.length],['Occupants',S.g.reduce(function(a,g){return a+((g.occ||[]).length)},0)],
-  ['Accounting note','This is an operational reconciliation summary, not a statutory balance sheet. Refund/no-refund selections are manual decisions; verify actual transfers and reconcile with the accounting ledger.']
- ];
- const csv=rows.map(function(row){return row.map(function(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'}).join(',')}).join('\r\n');
- const data='\uFEFF'+csv;
- if(nat({type:'saveFile',requestId:'balance-cancel-'+Date.now(),name:'aurelia-balance-sheet-cancellation-reconciliation.csv',mime:'text/csv',data:btoa(unescape(encodeURIComponent(data)))})){toast('Choose where to save the balance-sheet reconciliation');return}
- const blob=new Blob([data],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='aurelia-balance-sheet-cancellation-reconciliation.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url)},5000);toast('Balance sheet reconciliation CSV exported');
-};
-
-
-/* Startup recovery: surface runtime failures instead of leaving a blank preview. */
-(function(){
- function showFatal(message,source,line,col){
-  var box=document.getElementById('aurelia-startup-error');
-  if(!box){
-   box=document.createElement('section');box.id='aurelia-startup-error';
-   box.style.cssText='position:fixed;z-index:2147483647;inset:12px;background:#fff;color:#171717;padding:18px;border:3px solid #c22;border-radius:12px;overflow:auto;font:14px/1.5 system-ui,sans-serif;white-space:pre-wrap';
-   document.body.appendChild(box);
-  }
-  box.textContent='Aurelia could not start. Copy this error and send it:\n\n'+String(message||'Unknown error')+(source?'\nFile: '+source:'')+(line?'\nLine: '+line+(col?':'+col:''):'');
- }
- window.addEventListener('error',function(e){showFatal(e.message||e.error,e.filename,e.lineno,e.colno)});
- window.addEventListener('unhandledrejection',function(e){showFatal(e.reason&&e.reason.stack||e.reason||'Unhandled promise rejection')});
- function start(){
-  try{
-   if(typeof render!=='function')throw new Error('The main render() function is not available. The main application script did not initialize.');
-   render();
-   var box=document.getElementById('aurelia-startup-error');if(box)box.remove();
-  }catch(e){showFatal(e&&e.stack||e)}
- }
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
- else setTimeout(start,0);
-})();
-
-/* Ensure the latest financial totals are available in the P&L export and persist the initial fix. */
-try{persist()}catch(e){}
-</script>
-
-</body></html>
+</body>
+</html>
