@@ -625,10 +625,34 @@ function resetAll(){try{(window.__aureliaStorage||localStorage).removeItem(SK)}c
 /* backup engine */
 const DK=['rooms','b','t','today','hist','g','exp','inv','led','aud','fe','set','terms','sig','sales','au','inN','menu','day','cancelled'],SK='aurelia_lodge_v2',hashS=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(h*33^s.charCodeAt(i))>>>0;return h.toString(36)};let BKB=null;
 const curHash=()=>hashS(JSON.stringify(DK.map(k=>S[k])));
-function runBackup(auto){if(BKB)return;const h=curHash();if(h===S.bk.hash){if(!auto)toast('Everything is already backed up');return}const nm=`aurelia-backup-${ymd(0)}-${h}.json`,pl=JSON.stringify({v:2,hotel:S.set.name,at:new Date().toISOString(),data:Object.fromEntries(DK.map(k=>[k,S[k]]))});BKB={h,nm};if(nat({type:'backupDeviceNow',requestId:'bk'+Date.now(),name:nm,payload:pl}))return;if(window.BKDIR){BKDIR.getFileHandle(nm,{create:true}).then(f=>f.createWritable()).then(w=>w.write(pl).then(()=>w.close())).then(()=>bkDone(true),e=>bkDone(false,String(e)));return}BKB=null;if(!auto)toast('Choose a backup folder first')}
+function runBackup(auto){
+ if(BKB)return;
+ const h=curHash();if(h===S.bk.hash){if(!auto)toast('Everything is already backed up');return}
+ const nm='aurelia-backup-'+ymd(0)+'-'+h+'.json';
+ const pl=JSON.stringify({v:2,hotel:S.set.name,at:new Date().toISOString(),data:Object.fromEntries(DK.map(k=>[k,S[k]]))},null,2);
+ BKB={h,nm,payload:pl};
+ if(nat({type:'backupDeviceNow',requestId:'bk'+Date.now(),name:nm,payload:pl}))return;
+ const saveToDir=window.BKDIR;
+ if(saveToDir){saveToDir.getFileHandle(nm,{create:true}).then(f=>f.createWritable()).then(w=>w.write(pl).then(()=>w.close())).then(()=>bkDone(true),e=>bkDone(false,String(e)));return}
+ BKB=null;
+ const blob=new Blob([pl],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download=nm;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+ S.bk.hash=h;S.bk.last=new Date().toISOString();S.bk.hist=S.bk.hist||[];S.bk.hist.unshift({n:nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);persist();
+ toast('Backup downloaded. Save it in your chosen backup folder or Google Drive.');
+ if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render();
+}
 function bkDone(ok,err){if(ok&&BKB){S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast('Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
 function autoBackup(){if(S.bk.folder&&!BKB&&curHash()!==S.bk.hash)runBackup(true)}
-async function pickDir(){if(nat({type:'chooseDeviceBackupFolder',requestId:'bf'+Date.now()}))return;if(window.showDirectoryPicker){try{window.BKDIR=await showDirectoryPicker({mode:'readwrite'});S.bk.folder=true;S.bk.label=BKDIR.name;render();toast('Backup folder chosen');autoBackup()}catch(e){}}else toast('Choosing a folder works in the Android app')}
+async function pickDir(){
+ if(nat({type:'chooseDeviceBackupFolder',requestId:'bf'+Date.now()}))return;
+ if(window.showDirectoryPicker){
+  try{window.BKDIR=await window.showDirectoryPicker({mode:'readwrite'});S.bk.folder=true;S.bk.label=window.BKDIR.name;persist();render();toast('Backup folder chosen');autoBackup();return}
+  catch(e){if(e&&e.name==='AbortError')return;toast('Folder access was not granted. You can still download a backup file.');return}
+ }
+ // Mobile browsers without the File System Access API use a portable JSON backup.
+ S.bk.folder=false;S.bk.label='Download backup (choose folder when saving)';persist();render();
+ toast('This browser cannot write directly to a folder. Back up now downloads a JSON file you can move to Google Drive or another folder.');
+}
 window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{S.bk.folder=!!ok;S.bk.label=msg||'';render();toast(ok?'Backup folder ready':'No folder chosen');if(ok)autoBackup()};
 window.aureliaNativeDeviceBackupResult=(id,ok,err)=>bkDone(ok,err);window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{S.bk.folder=!!sel;persist()};
 function restoreF(el){
