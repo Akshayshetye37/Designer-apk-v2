@@ -137,6 +137,36 @@ body::after{display:none!important}
 .ad-slot[data-ad-ready="1"]{min-height:50px;background:rgba(0,0,0,.15)}
 .ad-slot.banner{max-width:100%}
 </style>
+
+<style>
+/* Responsive stays/calendar layout fixes */
+.rc-head-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+.rc-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.rc-heading>div:first-child{flex:1 1 230px;min-width:0}
+.rc-head-actions>*{max-width:100%}
+.rc-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px}
+.rc-toolbar>button:last-child{justify-self:end}
+.rc-range{white-space:nowrap;text-align:center}
+.rc-scroll{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.rc-table{min-width:650px;width:100%;table-layout:fixed}
+.rc-table th,.rc-table td{overflow-wrap:anywhere}
+.rc-table .rc-room{position:sticky;left:0;z-index:2;background:#12382a;min-width:92px}
+.rc-table thead .rc-room{z-index:3}
+.rc-cell span,.rc-cell small{display:block;max-width:100%;overflow-wrap:anywhere}
+.rc-cancel{border-color:rgba(223,124,112,.65)!important;color:#ffd4cd!important}
+.danger{background:#8b342d!important;color:#fff!important;border-color:#b9574c!important}
+@media(max-width:520px){
+ .rc-wrap{padding:14px;border-radius:22px}
+ .rc-heading{display:block}
+ .rc-head-actions{display:grid;grid-template-columns:1fr 1fr;margin-top:14px;justify-content:stretch}
+ .rc-head-actions .rc-new{grid-column:1/-1;width:100%}
+ .rc-head-actions button{width:100%;min-width:0;padding:10px 8px}
+ .rc-toolbar{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:5px}
+ .rc-toolbar button{padding:9px 7px;font-size:12px;white-space:nowrap}
+ .rc-range{font-size:12px}
+ .rc-table{min-width:610px}
+}
+</style>
 </head><body>
 
 <script id="aurelia-safe-storage">
@@ -1508,7 +1538,7 @@ inv=function(i){
  const b=bk(i);if(!b||!(Number(dueB(b))>0)||!S.set?.qr)return;
  root.insertAdjacentHTML('beforeend',uploadedQrWithDynamicBalance(b));
 };
-const _singleQrPaymentMethod=selectFolioPaymentMethod;
+const _singleQrPaymentMethod=window.selectFolioPaymentMethod||function(method){const root=$('#pan'),chips=root?.querySelector('#pm');if(!root||!chips)return;chips.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.method===method));};
 selectFolioPaymentMethod=function(method){
  const root=$('#pan'),chips=root?.querySelector('#pm');if(!root||!chips)return;
  chips.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.method===method));
@@ -2459,7 +2489,7 @@ cal=function(){
   }).join('');
   return '<tr><th class="rc-room"><strong>'+esc(r.n)+'</strong><small>'+esc(r.t||'Room')+'</small></th>'+cells+'</tr>';
  }).join('');
- return '<section class="rc-wrap"><header class="rc-heading"><div><div class="rc-eyebrow">ROOM PLANNER</div><h2>Reservation calendar</h2><p>Track arrivals, occupied rooms and availability at a glance.</p></div><button class="btn rc-new" onclick="resv()">＋ New reservation</button></header><div class="rc-toolbar"><button class="btn sm ghost" onclick="S.co-=7;render()">← Earlier</button><div class="rc-range">'+dateLabel(start)+' <span>—</span> '+dateLabel(start+13)+'</div><button class="btn sm ghost" onclick="S.co+=7;render()">Later →</button></div><div class="rc-legend"><span><i class="rc-dot occupied"></i> In house</span><span><i class="rc-dot booked"></i> Reserved</span><span><i class="rc-dot available"></i> Available · tap to book</span></div><div class="rc-scroll"><table class="cal rc-table"><thead><tr><th class="rc-room">Room</th>'+days.map(d=>'<th><span>'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][((Math.floor(Number(d))%7)+7)%7]+'</span><strong>'+esc(String(D(d).getDate()))+'</strong></th>').join('')+'</tr></thead><tbody>'+cells+'</tbody></table></div><footer class="rc-foot">Select an occupied room to open its folio. Select a reserved room to check in. Select an empty date to create a reservation.</footer></section>';
+ return '<section class="rc-wrap"><header class="rc-heading"><div><div class="rc-eyebrow">ROOM PLANNER</div><h2>Reservation calendar</h2><p>Track arrivals, occupied rooms and availability at a glance.</p></div><div class="rc-head-actions"><button class="btn sm ghost" onclick="S.f=\'\';render()">← Back to Stays</button><button class="btn rc-new" onclick="resv()">＋ New reservation</button><button class="btn sm ghost rc-cancel" onclick="openCancelBooking()">Cancel booking</button></div></header><div class="rc-toolbar"><button class="btn sm ghost" onclick="S.co-=7;render()">← Earlier</button><div class="rc-range">'+dateLabel(start)+' <span>—</span> '+dateLabel(start+13)+'</div><button class="btn sm ghost" onclick="S.co+=7;render()">Later →</button></div><div class="rc-legend"><span><i class="rc-dot occupied"></i> In house</span><span><i class="rc-dot booked"></i> Reserved</span><span><i class="rc-dot available"></i> Available · tap to book</span></div><div class="rc-scroll"><table class="cal rc-table"><thead><tr><th class="rc-room">Room</th>'+days.map(d=>'<th><span>'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][((Math.floor(Number(d))%7)+7)%7]+'</span><strong>'+esc(String(D(d).getDate()))+'</strong></th>').join('')+'</tr></thead><tbody>'+cells+'</tbody></table></div><footer class="rc-foot">Select an occupied room to open its folio. Select a reserved room to check in. Select an empty date to create a reservation.</footer></section>';
 };
 /* Preserve calendar selection and call/WhatsApp actions ahead of Folio. */
 const _staysBeforeContact=V.stays;
@@ -2490,5 +2520,27 @@ V.stays=function(){
 .rc-scroll{overflow-x:auto;border:1px solid rgba(220,198,133,.22);border-radius:18px;background:rgba(0,0,0,.11)}.rc-table{width:100%;min-width:680px;border-collapse:separate;border-spacing:0;font-size:11px}.rc-table th,.rc-table td{border-right:1px solid rgba(220,198,133,.1);border-bottom:1px solid rgba(220,198,133,.1);padding:0;text-align:center}.rc-table thead th{height:54px;background:rgba(220,198,133,.06);color:#b9c6bc;font-weight:500}.rc-table thead th span,.rc-table thead th strong{display:block}.rc-table thead th strong{font-size:14px;color:#f1dfb1;margin-top:3px}.rc-table .rc-room{position:sticky;left:0;z-index:2;min-width:82px;text-align:left;padding:10px;background:#123628;color:#f1dfb1}.rc-room strong,.rc-room small{display:block}.rc-room small{color:#9fb1a5;font-size:10px;font-weight:400;margin-top:4px}.rc-table td{height:56px;min-width:42px;cursor:pointer;transition:background .15s}.rc-table td:last-child,.rc-table th:last-child{border-right:0}.rc-table tr:last-child td,.rc-table tr:last-child th{border-bottom:0}.rc-table .rc-empty{background:rgba(255,255,255,.012)}.rc-table .rc-empty:active{background:rgba(220,198,133,.18)}.rc-table .rc-cell{padding:4px 3px}.rc-table .rc-cell span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:76px;margin:auto;color:#fff1d0;font-weight:600}.rc-table .rc-cell small{display:block;font-size:9px;margin-top:4px;color:#e2d2a9}.rc-table .rc-cell.inhouse{background:linear-gradient(145deg,rgba(214,183,105,.38),rgba(214,183,105,.13));box-shadow:inset 0 0 0 1px rgba(231,205,135,.3)}.rc-table .rc-cell.reserved{background:linear-gradient(145deg,rgba(163,115,62,.35),rgba(163,115,62,.12))}.rc-foot{font-size:11px;line-height:1.55;color:#9fb1a5;margin-top:14px}
 @media(max-width:480px){.rc-wrap{padding:14px;border-radius:22px}.rc-heading h2{font-size:25px}.rc-heading p{max-width:270px}.rc-toolbar{padding:8px}.rc-toolbar .btn{padding:9px 10px}.rc-range{font-size:11px}.rc-new{font-size:12px}}
 </style>
-</body>
-</html>
+
+/* UX repair: safe payment-method fallback, stable calendar exit, cancellation, and responsive Stays alignment. */
+window.selectFolioPaymentMethod=window.selectFolioPaymentMethod||function(method){
+ const root=document.querySelector('#pan'),chips=root&&root.querySelector('#pm');if(!root||!chips)return;
+ chips.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.method===method));
+ const b=typeof bk==='function'?bk(Number(window.__activeFolioIndex)):null;
+ root.querySelectorAll('.folio-upi-qr,.hotel-payment-qr').forEach(n=>n.remove());
+ if(method==='UPI'){if(b&&S.set&&S.set.qr&&typeof uploadedQrWithDynamicBalance==='function'){const holder=document.createElement('div');holder.innerHTML=uploadedQrWithDynamicBalance(b);root.appendChild(holder.firstElementChild)}else if(typeof toast==='function')toast('Upload the hotel UPI QR in Settings first')}
+};
+window.openCancelBooking=function(){
+ const bookings=(Array.isArray(S.b)?S.b:[]).filter(b=>b&&b.st!=='done');
+ const content=bookings.length?bookings.map(b=>'<div class="item"><div class="f"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · '+(b.st==='in'?'In house':'Reserved')+'</small></div><button class="btn sm danger" onclick="cancelBookingById('+Number(b.id)+')">Cancel</button></div>').join(''):'<div class="empty">No active bookings to cancel.</div>';
+ openS('<h2 class="foil">Cancel booking</h2><p class="lab">Choose a reservation to cancel. Cancellation is recorded in the audit log.</p><div class="list">'+content+'</div><button class="btn ghost" style="width:100%;margin-top:12px" onclick="closeS()">Keep bookings</button>');
+};
+window.cancelBookingById=function(id){
+ const b=typeof bk==='function'?bk(Number(id)):null;if(!b){toast('Booking not found');return}
+ openS('<h2 class="foil">Confirm cancellation</h2><p class="lab">Cancel '+esc(b.g)+' · Room '+esc(b.room)+'? This removes the active booking from the calendar. Any recorded payments remain in the audit trail.</p><div class="row"><button class="btn danger" onclick="confirmCancelBooking('+Number(id)+')">Confirm cancel</button><button class="btn ghost" onclick="openCancelBooking()">Go back</button></div>');
+};
+window.confirmCancelBooking=function(id){
+ const i=(S.b||[]).findIndex(x=>Number(x.id)===Number(id));if(i<0){toast('Booking not found');return}
+ const b=S.b[i];S.b.splice(i,1);if(typeof aud==='function')aud('Booking cancelled',String(b.g||'Guest')+' · Room '+String(b.room||'')+' · Booking '+String(b.id));
+ if(typeof persist==='function')persist();if(typeof closeS==='function')closeS();S.f='';render();toast('Booking cancelled');
+};
+</body>\n</html>
