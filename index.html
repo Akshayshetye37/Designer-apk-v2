@@ -2549,7 +2549,7 @@ window.selectFolioPaymentMethod=window.selectFolioPaymentMethod||function(method
 };
 window.openCancelBooking=function(){
  const bookings=(Array.isArray(S.b)?S.b:[]).filter(b=>b&&b.st!=='done');
- const content=bookings.length?bookings.map(b=>'<div class="item"><div class="f"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · '+(b.st==='in'?'In house':'Reserved')+'</small></div><button class="btn sm danger" onclick="cancelBookingById('+Number(b.id)+')">Cancel</button></div>').join(''):'<div class="empty">No active bookings to cancel.</div>';
+ const content=bookings.length?bookings.map(function(b){return '<div class="item"><div class="f"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · '+(b.st==='in'?'In house':'Reserved')+'</small></div><button class="btn sm danger" onclick="cancelBookingById('+Number(b.id)+')">Cancel</button></div>'}).join(''):'<div class="empty">No active bookings to cancel.</div>';
  openS('<h2 class="foil">Cancel booking</h2><p class="lab">Choose a reservation to cancel. Cancellation is recorded in the audit log.</p><div class="list">'+content+'</div><button class="btn ghost" style="width:100%;margin-top:12px" onclick="closeS()">Keep bookings</button>');
 };
 window.cancelBookingById=function(id){
@@ -2557,7 +2557,7 @@ window.cancelBookingById=function(id){
  openS('<h2 class="foil">Confirm cancellation</h2><p class="lab">Cancel '+esc(b.g)+' · Room '+esc(b.room)+'? This removes the active booking from the calendar. Any recorded payments remain in the audit trail.</p><div class="row"><button class="btn danger" onclick="confirmCancelBooking('+Number(id)+')">Confirm cancel</button><button class="btn ghost" onclick="openCancelBooking()">Go back</button></div>');
 };
 window.confirmCancelBooking=function(id){
- const i=(S.b||[]).findIndex(x=>Number(x.id)===Number(id));if(i<0){toast('Booking not found');return}
+ const i=(S.b||[]).findIndex(function(x){return Number(x.id)===Number(id)});if(i===-1){toast('Booking not found');return}
  const b=S.b[i];S.b.splice(i,1);if(typeof aud==='function')aud('Booking cancelled',String(b.g||'Guest')+' · Room '+String(b.room||'')+' · Booking '+String(b.id));
  if(typeof persist==='function')persist();if(typeof closeS==='function')closeS();S.f='';render();toast('Booking cancelled');
 };
