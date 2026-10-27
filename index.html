@@ -192,7 +192,19 @@ body::after{display:none!important}
 .stays-card-actions>.btn{display:flex;align-items:center;justify-content:center;width:100%;min-width:0;min-height:46px;padding:8px 6px;white-space:normal;overflow-wrap:anywhere;text-align:center}
 @media(min-width:520px){.stays-filters{grid-template-columns:repeat(5,minmax(0,1fr))}.stays-card-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
 </style>
-</head><body>
+<style>
+.stays-filters{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px!important;overflow:visible!important;margin:10px 0 18px}
+.stays-filters .chip{min-width:0;width:100%;min-height:44px;padding:7px 3px;white-space:normal;line-height:1.15;text-align:center;display:flex;align-items:center;justify-content:center;font-size:clamp(11px,3.3vw,15px)}
+.guest-contact-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important;width:100%;min-width:0;margin-top:8px}
+.guest-contact-actions .btn{display:flex!important;align-items:center;justify-content:center;width:100%;min-width:0;min-height:44px;padding:8px 5px;white-space:normal;overflow-wrap:anywhere;text-align:center}
+.ca-period{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ca-period .fld{min-width:0}.ca-period input{width:100%;min-width:0}
+.ca-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.ca-actions .btn{width:100%;min-width:0;white-space:normal;line-height:1.25}
+@media(max-width:390px){.ca-period,.ca-actions{grid-template-columns:1fr}}
+#ci,#co{min-width:0;max-width:100%}
+input[type=date]{max-width:100%;min-width:0}
+</style></head><body>
 
 <script id="aurelia-safe-storage">
 (function(){
@@ -564,8 +576,8 @@ const t=$('#actual-checkin-time')?.value||b.checkInTime||defCheckInTime();if(!t)
 const r=rm(b.room);if(r&&r.s!=='ready'&&b.st!=='in'){toast('Room '+b.room+' is not ready yet');return}
 b.checkInTime=t;b.actualCheckInAt=new Date().toISOString();b.actualCheckInDate=new Date().toISOString().slice(0,10);
 b.st='in';if(r)r.s='occ';persist();closeS();render();toast(b.g+' checked in at '+t);aud('Check-in',b.g+' · Room '+b.room+' · '+t)}
-function cxl(i){const b=bk(i);S.b.splice(S.b.indexOf(b),1);aud('Reservation cancelled',b.g+' · Room '+b.room);render();toast('Reservation cancelled')}
-V.stays=()=>{if(S.f==='cal')return cal();const F={all:'All',res:'Arriving',in:'In house',done:'Departed'},l=S.b.filter(b=>S.f==='all'||b.st===S.f);return`<h2 style="margin-top:6px;font-size:36px">Stays</h2><div class="chips">${Object.entries(F).map(([k,v])=>`<button class="chip ${S.f===k?'on':''}" onclick="S.f='${k}';render()">${v}</button>`).join('')}<button class="chip" onclick="S.f='cal';render()">Calendar</button></div><div class="grid">${l.map(b=>{const g=gOf(b.g),r=rm(b.room)||{t:''};return`<div class="card"><div class="row"><div><h3>${esc(b.g)}</h3><div class="lab">Room ${b.room} · ${r.t} · ${nts(b)} night${nts(b)>1?'s':''}</div></div><span class="tag ${b.st==='in'?'occ':b.st==='res'?'clean':'ready'}">${{in:'In house',res:'Arriving',done:'Departed'}[b.st]}</span></div><div class="row" style="margin-top:14px;flex-wrap:wrap"><span class="lab">${fd(b.in)} to ${fd(b.out)}${idMissing(g)?' · ID incomplete':''}</span><span style="display:flex;gap:6px">${b.st==='res'?`<button class="btn sm ghost" onclick="ask('Cancel reservation','This frees the suite for ${esc(b.g)}’s dates.','Cancel it','cxl(${b.id})')">Cancel</button><button class="btn sm" onclick="cin(${b.id})">Check in</button>`:b.st==='in'?`<button class="btn sm ghost" onclick="folio(${b.id})">Folio</button><button class="btn sm" onclick="outB(${b.id})">Check out</button>`:`<button class="btn sm ghost" onclick="inv(${b.id})">Invoice</button>`}</span></div></div>`}).join('')||'<div class="empty">Nothing here yet. Add a reservation below.</div>'}</div><button class="btn fab" onclick="resv()">New reservation</button>`};
+function cxl(i){const b=bk(i);if(!b)return;S.cancelled=Array.isArray(S.cancelled)?S.cancelled:[];S.cancelled.unshift({...b,cancelledAt:new Date().toISOString(),cancelledStatus:'no_refund',refundStatus:'No refund',cancelledFromStatus:b.st});S.b.splice(S.b.indexOf(b),1);aud('Reservation cancelled',b.g+' · Room '+b.room+' · No refund selected');persist();S.tab='more';S.sub='cancelbookings';render();toast('Reservation moved to Cancelled bookings')}
+V.stays=()=>{if(S.f==='cal')return cal();const F={all:'All',res:'Arriving',in:'In house',done:'Departed'},l=S.b.filter(b=>S.f==='all'||b.st===S.f);return`<h2 style="margin-top:6px;font-size:36px">Stays</h2><div class="chips">${Object.entries(F).map(([k,v])=>`<button class="chip ${S.f===k?'on':''}" onclick="S.f='${k}';render()">${v}</button>`).join('')}<button class="chip" onclick="S.f='cal';render()">Calendar</button></div><div class="grid">${l.map(b=>{const g=gOf(b.g),r=rm(b.room)||{t:''};return`<div class="card"><div class="row"><div><h3>${esc(b.g)}</h3><div class="lab">Room ${b.room} · ${r.t} · ${nts(b)} night${nts(b)>1?'s':''}</div></div><span class="tag ${b.st==='in'?'occ':b.st==='res'?'clean':'ready'}">${{in:'In house',res:'Arriving',done:'Departed'}[b.st]}</span></div><div class="row" style="margin-top:14px;flex-wrap:wrap"><span class="lab">${fd(b.in)} to ${fd(b.out)}${idMissing(g)?' · ID incomplete':''}</span>${guestContactActions(b.g,guestPhoneFor(b.g,g||b))}<span style="display:flex;gap:6px">${b.st==='res'?`<button class="btn sm ghost" onclick="ask('Cancel reservation','This frees the suite for ${esc(b.g)}’s dates.','Cancel it','cxl(${b.id})')">Cancel</button><button class="btn sm" onclick="cin(${b.id})">Check in</button>`:b.st==='in'?`<button class="btn sm ghost" onclick="folio(${b.id})">Folio</button><button class="btn sm" onclick="outB(${b.id})">Check out</button>`:`<button class="btn sm ghost" onclick="inv(${b.id})">Invoice</button>`}</span></div></div>`}).join('')||'<div class="empty">Nothing here yet. Add a reservation below.</div>'}</div><button class="btn fab" onclick="resv()">New reservation</button>`};
 /* rooms */
 V.rooms=()=>`<div class="row"><h2 style="margin-top:6px;font-size:36px">Rooms</h2><button class="btn sm" onclick="roomNew()">Add room</button></div>${S.rooms.length?`<div class="rooms">${S.rooms.map((r,i)=>{const b=S.b.find(b=>b.room===r.n&&b.st==='in');return`<div class="card room" onclick="roomS(${i})"><div class="row"><span class="n">${esc(r.n)}</span><span class="tag ${r.s}">${{ready:'Ready',occ:'Occupied',clean:'Cleaning',out:'Out of service'}[r.s]}</span></div><div class="lab">${esc(r.t)}</div><div style="margin-top:6px;color:var(--gold)">${K(r.r)} a night</div><div class="lab" style="margin-top:8px;min-height:22px">${b?esc(b.g):'&nbsp;'}</div></div>`}).join('')}</div>`:'<div class="empty">No rooms yet. Add your first room.</div>'}`;
 const rform=(r,i)=>`<label class="fld"><span>Room number</span><input id="rn1" value="${esc(r.n)}"></label><label class="fld"><span>Room type</span><input id="rn2" list="rtl" value="${esc(r.t)}"><datalist id="rtl">${types.map(t=>`<option>${esc(t[0])}`).join('')}</datalist></label><label class="fld"><span>Rate per night</span><input id="rn3" type="number" value="${r.r}"></label>`;
@@ -2618,6 +2630,41 @@ V.stays=function(){
  // Ensure all contact action sets occupy a full grid row.
  html=html.replace(/<span class="guest-contact-actions">/g,'<span class="guest-contact-actions">');
  return html;
+};
+
+/* Accountant-style management P&L and balance-sheet schedule (period-filtered). */
+function caDateValue(v){if(!v)return null;const d=new Date(v);return Number.isNaN(+d)?null:d}
+function caInPeriod(date,start,end){const d=caDateValue(date);return !!d&&(!start||d>=new Date(start+'T00:00:00'))&&(!end||d<new Date(end+'T23:59:59.999'))}
+function caReportRows(){
+ const start=document.querySelector('#ca-start')?.value||'',end=document.querySelector('#ca-end')?.value||'';
+ const bookings=(S.b||[]).filter(b=>caInPeriod(b.createdAt||b.bookedAt||b.actualCheckInAt||b.scheduledCheckIn||new Date(),start,end));
+ const allBookings=S.b||[];
+ const revenueRooms=bookings.reduce((a,b)=>a+Math.max(0,Number(tt(b))||0),0);
+ const revenueDining=(S.sales||[]).filter(s=>caInPeriod(s.createdAt||s.paidAt||s.date||new Date(),start,end)).reduce((a,s)=>a+Math.max(0,Number(s.a)||0),0);
+ const revenueExtras=bookings.reduce((a,b)=>a+(b.ch||[]).filter(x=>catOf(x)!=='din').reduce((z,x)=>z+(Number(x[1])||0),0),0);
+ const discounts=bookings.reduce((a,b)=>a+(Number(b.dc)||0),0);
+ const expenses=(S.exp||[]).filter(e=>!e.v&&caInPeriod(e.date||e.at||new Date(),start,end));
+ const expenseTotal=expenses.reduce((a,e)=>a+(Number(e.a)||0),0);
+ const totalRevenue=revenueRooms+revenueDining+revenueExtras-discounts;
+ const operatingProfit=totalRevenue-expenseTotal;
+ const roomReceivables=allBookings.filter(b=>b.st!=='done').reduce((a,b)=>a+Math.max(0,Number(dueB(b))||0),0);
+ const inventory=(S.inv||[]).reduce((a,x)=>a+Math.max(0,Number(x.q)||0)*Math.max(0,Number(x.u)||0),0);
+ const cashReceived=allBookings.reduce((a,b)=>a+(b.pays||[]).reduce((z,p)=>z+(Number(p.a)||0),0),0)+(S.sales||[]).reduce((a,s)=>a+(Number(s.a)||0),0);
+ const cancelledDeposits=(S.cancelled||[]).filter(b=>b.cancelledStatus==='refund_pending').reduce((a,b)=>a+(Number(b.p)||0),0);
+ const assets=cashReceived+roomReceivables+inventory;
+ return {start,end,revenueRooms,revenueDining,revenueExtras,discounts,totalRevenue,expenses:expenseTotal,operatingProfit,roomReceivables,inventory,cashReceived,cancelledDeposits,assets};
+}
+window.exportCAReport=function(kind){
+ const d=caReportRows(),rows=[['HARI OM RETREAT — MANAGEMENT ACCOUNTS'],['Report',kind==='pl'?'Profit and Loss Statement':'Balance Sheet / Statement of Financial Position'],['Period start',d.start||'All available dates'],['Period end',d.end||'Current'],['Currency',S.set.cur||'INR'],[],['Account','Amount']];
+ if(kind==='pl')rows.push(['Room revenue',d.revenueRooms],['Dining revenue',d.revenueDining],['Other guest revenue',d.revenueExtras],['Less: discounts',-d.discounts],['Total revenue',d.totalRevenue],['Operating expenses',-d.expenses],['Net operating profit/(loss)',d.operatingProfit]);
+ else rows.push(['ASSETS'],['Recorded collections (cash proxy; reconcile to cash/bank)',d.cashReceived],['Trade receivables / guest balances',d.roomReceivables],['Inventory at recorded unit cost',d.inventory],['Total provisional assets',d.assets],[],['LIABILITIES requiring ledger input'],['Refunds pending manual processing',d.cancelledDeposits],['Supplier payables / taxes / guest deposits','Not recorded in current app ledger'],[],['EQUITY'],['Balancing equity','Cannot be certified without opening balances and liabilities'],[],['Basis','Management estimate from app records; not a statutory or audited financial statement. Reconcile cash, bank, taxes, payables, depreciation, owner capital and opening balances with a Chartered Accountant.']);
+ const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n'),data='\uFEFF'+csv;
+ const blob=new Blob([data],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=kind==='pl'?'profit-and-loss-management-accounts.csv':'balance-sheet-management-schedule.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('Management report exported as CSV');
+};
+const _repBeforeCA=SUB.rep;
+SUB.rep=function(){
+ const base=_repBeforeCA(),today=new Date().toISOString().slice(0,10),monthStart=today.slice(0,8)+'01';
+ return base+'<div class="card ca-report" style="margin-top:16px"><h2>Professional management accounts</h2><p class="lab">Period-based schedules for review by your accountant. Enter a period or leave dates blank for the available records.</p><div class="ca-period"><label class="fld"><span>From date</span><input id="ca-start" type="date" value="'+monthStart+'"></label><label class="fld"><span>To date</span><input id="ca-end" type="date" value="'+today+'"></label></div><div class="ca-actions"><button class="btn" onclick="exportCAReport(\'pl\')">Export Profit &amp; Loss</button><button class="btn ghost" onclick="exportCAReport(\'bs\')">Export Balance Sheet Schedule</button></div><div class="lab" style="margin-top:12px">Includes revenue categories, discounts, operating expenses, net operating profit/loss, recorded collections, guest receivables, stock valuation and pending refunds. A statutory balance sheet needs verified cash/bank balances, creditors, taxes, deposits, fixed assets, depreciation and opening capital.</div></div>';
 };
 </script>
 </body>
