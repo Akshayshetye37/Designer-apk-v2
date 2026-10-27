@@ -167,7 +167,19 @@ body::after{display:none!important}
  .rc-table{min-width:610px}
 }
 </style>
-</head><body>
+<style>
+/* Mobile alignment for stay actions and cancellation archive */
+.grid .card .row[style*="flex-wrap:wrap"]{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.grid .card .row[style*="flex-wrap:wrap"]>span[style*="display:flex"]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important;width:100%;min-width:0}
+.grid .card .row[style*="flex-wrap:wrap"]>span[style*="display:flex"] .btn{display:flex;align-items:center;justify-content:center;width:100%;min-width:0;min-height:46px;padding:10px 8px;text-align:center;white-space:normal;overflow-wrap:anywhere}
+.cancel-choice{display:grid;grid-template-columns:1fr;gap:10px;margin-top:18px}
+.cancel-choice .btn{width:100%;min-height:48px;white-space:normal;line-height:1.25}
+.cancel-record{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--ln)}
+.cancel-record-main{flex:1;min-width:0;display:grid;gap:5px;overflow-wrap:anywhere}
+.cancel-record-main small{color:var(--mu)}
+.refund-status{color:var(--gold)!important;font-weight:600}
+@media(max-width:420px){.grid .card .row[style*="flex-wrap:wrap"]>span[style*="display:flex"]{grid-template-columns:repeat(2,minmax(0,1fr))}.cancel-record{align-items:flex-start}.cancel-record .btn{max-width:120px;white-space:normal}}
+</style></head><body>
 
 <script id="aurelia-safe-storage">
 (function(){
@@ -579,7 +591,7 @@ function demoGo(){S.b=S.b.filter(x=>!x.demo);S.g=S.g.filter(x=>!x.demo);S.rooms=
 function confirmResetAll(){if(!confirm('Erase all data on this device? A backup will be attempted first.'))return;try{if(typeof runBackup==='function')runBackup(true)}catch(e){}resetAll()}
 function resetAll(){try{(window.__aureliaStorage||localStorage).removeItem(SK)}catch(e){}location.reload()}
 /* backup engine */
-const DK=['rooms','b','t','today','hist','g','exp','inv','led','aud','fe','set','terms','sig','sales','au','inN','menu','day'],SK='aurelia_lodge_v2',hashS=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(h*33^s.charCodeAt(i))>>>0;return h.toString(36)};let BKB=null;
+const DK=['rooms','b','t','today','hist','g','exp','inv','led','aud','fe','set','terms','sig','sales','au','inN','menu','day','cancelled'],SK='aurelia_lodge_v2',hashS=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(h*33^s.charCodeAt(i))>>>0;return h.toString(36)};let BKB=null;
 const curHash=()=>hashS(JSON.stringify(DK.map(k=>S[k])));
 function runBackup(auto){if(BKB)return;const h=curHash();if(h===S.bk.hash){if(!auto)toast('Everything is already backed up');return}const nm=`aurelia-backup-${ymd(0)}-${h}.json`,pl=JSON.stringify({v:2,hotel:S.set.name,at:new Date().toISOString(),data:Object.fromEntries(DK.map(k=>[k,S[k]]))});BKB={h,nm};if(nat({type:'backupDeviceNow',requestId:'bk'+Date.now(),name:nm,payload:pl}))return;if(window.BKDIR){BKDIR.getFileHandle(nm,{create:true}).then(f=>f.createWritable()).then(w=>w.write(pl).then(()=>w.close())).then(()=>bkDone(true),e=>bkDone(false,String(e)));return}BKB=null;if(!auto)toast('Choose a backup folder first')}
 function bkDone(ok,err){if(ok&&BKB){S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast('Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
@@ -2552,19 +2564,35 @@ window.openCancelBooking=function(){
  const content=bookings.length?bookings.map(function(b){return '<div class="item"><div class="f"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · '+(b.st==='in'?'In house':'Reserved')+'</small></div><button class="btn sm danger" onclick="cancelBookingById('+Number(b.id)+')">Cancel</button></div>'}).join(''):'<div class="empty">No active bookings to cancel.</div>';
  openS('<h2 class="foil">Cancel booking</h2><p class="lab">Choose a reservation to cancel. Cancellation is recorded in the audit log.</p><div class="list">'+content+'</div><button class="btn ghost" style="width:100%;margin-top:12px" onclick="closeS()">Keep bookings</button>');
 };
+
+/* Cancelled bookings archive with explicit admin-managed refund status. */
+S.cancelled=Array.isArray(S.cancelled)?S.cancelled:[];
 window.cancelBookingById=function(id){
- const b=typeof bk==='function'?bk(Number(id)):null;if(!b){toast('Booking not found');return}
- openS('<h2 class="foil">Confirm cancellation</h2><p class="lab">Cancel '+esc(b.g)+' · Room '+esc(b.room)+'? This removes the active booking from the calendar. Any recorded payments remain in the audit trail.</p><div class="row"><button class="btn danger" onclick="confirmCancelBooking('+Number(id)+')">Confirm cancel</button><button class="btn ghost" onclick="openCancelBooking()">Go back</button></div>');
+ const b=typeof bk==='function'?bk(Number(id)):null;
+ if(!b){toast('Booking not found');return}
+ openS('<h2 class="foil">Cancel booking</h2><p class="lab">Cancel '+esc(b.g)+' · Room '+esc(b.room)+'? Choose the cancellation outcome. Refunds are never issued automatically; the admin records refund status manually.</p><div class="cancel-choice"><button class="btn danger" onclick="confirmCancelBooking('+Number(id)+',\'no_refund\')">Cancel · No refund</button><button class="btn" onclick="confirmCancelBooking('+Number(id)+',\'refund_pending\')">Cancel · Refund to be handled manually</button></div><button class="btn ghost" style="width:100%;margin-top:10px" onclick="openCancelBooking()">Back</button>');
 };
-window.confirmCancelBooking=function(id){
- const i=(S.b||[]).findIndex(function(x){return Number(x.id)===Number(id)});if(i===-1){toast('Booking not found');return}
- const b=S.b[i];S.b.splice(i,1);if(typeof aud==='function')aud('Booking cancelled',String(b.g||'Guest')+' · Room '+String(b.room||'')+' · Booking '+String(b.id));
- if(typeof persist==='function')persist();if(typeof closeS==='function')closeS();S.f='';render();toast('Booking cancelled');
+window.confirmCancelBooking=function(id,refundStatus){
+ const i=(S.b||[]).findIndex(function(x){return Number(x.id)===Number(id)});
+ if(i===-1){toast('Booking not found');return}
+ const b=S.b[i];
+ S.cancelled=S.cancelled||[];
+ S.cancelled.unshift({...b,cancelledAt:new Date().toISOString(),cancelledStatus:refundStatus==='refund_pending'?'refund_pending':'no_refund',refundStatus:refundStatus==='refund_pending'?'Pending manual admin review':'No refund',cancelledFromStatus:b.st});
+ S.b.splice(i,1);
+ if(typeof aud==='function')aud('Booking cancelled',String(b.g||'Guest')+' · Room '+String(b.room||'')+' · '+(refundStatus==='refund_pending'?'Refund pending manual admin review':'No refund'));
+ if(typeof persist==='function')persist();
+ if(typeof closeS==='function')closeS();
+ S.f='';S.sub='cancelbookings';S.tab='more';render();
+ toast(refundStatus==='refund_pending'?'Booking cancelled · Refund requires admin action':'Booking cancelled · No refund');
+};
+SUB.cancelbookings=()=>hd('Cancelled bookings')+'<div class="card"><div class="lab">Cancelled reservations are archived here. Refunds are not automatic. Admin must manually review and update the refund status.</div><div class="list">'+((Array.isArray(S.cancelled)?S.cancelled:[]).map(function(b,i){const status=b.refundStatus||((b.cancelledStatus==='refund_pending')?'Pending manual admin review':'No refund');return '<div class="cancel-record"><div class="cancel-record-main"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · Cancelled '+esc(String(b.cancelledAt||'').slice(0,10)||'Date not recorded')+'</small><small class="refund-status">'+esc(status)+'</small></div>'+(b.cancelledStatus==='refund_pending'?'<button class="btn sm" onclick="setCancellationRefund('+i+',\'refunded\')">Mark refunded</button>':'<span class="tag ready">No refund</span>')+'</div>'}).join('')||'<div class="empty">No cancelled bookings yet.</div>')+'</div></div><button class="btn ghost" style="margin-top:12px" onclick="S.sub=null;render()">← Back to More</button>';
+window.setCancellationRefund=function(i,status){
+ const b=(S.cancelled||[])[Number(i)];if(!b){toast('Cancelled booking not found');return}
+ b.cancelledStatus='refunded';b.refundStatus='Refund manually marked as completed';b.refundRecordedAt=new Date().toISOString();
+ if(typeof aud==='function')aud('Refund status updated',String(b.g||'Guest')+' · Room '+String(b.room||'')+' · Marked refunded by admin');
+ persist();render();toast('Refund status updated manually');
 };
 
-/* Dedicated Cancel Bookings section in More (not a modal). */
-if(!TL.some(item=>item[0]==='cancelbookings'))TL.push(['cancelbookings','Cancel bookings','Review and cancel active reservations','']);
-SUB.cancelbookings=()=>hd('Cancel bookings')+'<div class="card"><div class="lab">Active reservations and in-house stays appear here. Select Cancel to review and confirm cancellation.</div><div class="list">'+((Array.isArray(S.b)?S.b:[]).filter(b=>b&&b.st!=='done').map(function(b){return '<div class="item"><div class="f"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · '+(b.st==='in'?'In house':'Reserved')+'</small></div><button class="btn sm danger" onclick="cancelBookingById('+Number(b.id)+')">Cancel</button></div>'}).join('')||'<div class="empty">No active bookings to cancel.</div>')+'</div></div><button class="btn ghost" style="margin-top:12px" onclick="S.sub=null;render()">← Back to More</button>';
 </script>
 </body>
 </html>
