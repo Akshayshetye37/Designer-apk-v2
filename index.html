@@ -1941,7 +1941,7 @@ V.dining=function(){
  return html;
 };
 /* Build the shared PNG from the same invoice DOM and CSS as the on-screen/print invoice. */
-shareInvoiceImage=async function(i){
+async function shareInvoiceImage(i){
  const b=bk(i);if(!b){toast('Booking not found');return}
  inv(i);
  const el=$('#invd');if(!el){toast('Invoice preview not found');return}
