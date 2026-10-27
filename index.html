@@ -651,7 +651,7 @@ async function pickDir(){
  }
  S.bk.folder=false;S.bk.label='Save backup file to Downloads or Google Drive';persist();
  toast('Folder picker is not supported here. Choose a destination in the file save dialog.');
- runBackup(false);
+ const previousHash=S.bk.hash;S.bk.hash='';runBackup(false);
 }
 window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{S.bk.folder=!!ok;S.bk.label=msg||'';render();toast(ok?'Backup folder ready':'No folder chosen');if(ok)autoBackup()};
 window.aureliaNativeDeviceBackupResult=(id,ok,err)=>bkDone(ok,err);window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{S.bk.folder=!!sel;persist()};
