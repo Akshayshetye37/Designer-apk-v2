@@ -2561,6 +2561,10 @@ window.confirmCancelBooking=function(id){
  const b=S.b[i];S.b.splice(i,1);if(typeof aud==='function')aud('Booking cancelled',String(b.g||'Guest')+' · Room '+String(b.room||'')+' · Booking '+String(b.id));
  if(typeof persist==='function')persist();if(typeof closeS==='function')closeS();S.f='';render();toast('Booking cancelled');
 };
+
+/* Dedicated Cancel Bookings section in More (not a modal). */
+if(!TL.some(item=>item[0]==='cancelbookings'))TL.push(['cancelbookings','Cancel bookings','Review and cancel active reservations','']);
+SUB.cancelbookings=()=>hd('Cancel bookings')+'<div class="card"><div class="lab">Active reservations and in-house stays appear here. Select Cancel to review and confirm cancellation.</div><div class="list">'+((Array.isArray(S.b)?S.b:[]).filter(b=>b&&b.st!=='done').map(function(b){return '<div class="item"><div class="f"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · '+(b.st==='in'?'In house':'Reserved')+'</small></div><button class="btn sm danger" onclick="cancelBookingById('+Number(b.id)+')">Cancel</button></div>'}).join('')||'<div class="empty">No active bookings to cancel.</div>')+'</div></div><button class="btn ghost" style="margin-top:12px" onclick="S.sub=null;render()">← Back to More</button>';
 </script>
 </body>
 </html>
