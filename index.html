@@ -623,7 +623,7 @@ function demoGo(){S.b=S.b.filter(x=>!x.demo);S.g=S.g.filter(x=>!x.demo);S.rooms=
 function confirmResetAll(){if(!confirm('Erase all data on this device? A backup will be attempted first.'))return;try{if(typeof runBackup==='function')runBackup(true)}catch(e){}resetAll()}
 function resetAll(){try{(window.__aureliaStorage||localStorage).removeItem(SK)}catch(e){}location.reload()}
 /* backup engine */
-const DK=['rooms','b','t','today','hist','g','exp','inv','led','aud','fe','set','terms','sig','sales','au','inN','menu','day','cancelled'],SK='aurelia_lodge_v2',hashS=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(h*33^s.charCodeAt(i))>>>0;return h.toString(36)};let BKB=null;
+const DK=['rooms','b','t','today','hist','g','exp','inv','led','aud','fe','set','terms','sig','sales','au','inN','menu','day','cancelled','tableGuests','tableRooms','restaurant'],SK='aurelia_lodge_v2',hashS=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(h*33^s.charCodeAt(i))>>>0;return h.toString(36)};let BKB=null;
 const curHash=()=>hashS(JSON.stringify(DK.map(k=>S[k])));
 function runBackup(auto){
  if(BKB)return;
@@ -646,16 +646,12 @@ function autoBackup(){if(S.bk.folder&&!BKB&&curHash()!==S.bk.hash)runBackup(true
 async function pickDir(){
  if(nat({type:'chooseDeviceBackupFolder',requestId:'bf'+Date.now()}))return;
  if(window.showDirectoryPicker){
-  try{
-   window.BKDIR=await window.showDirectoryPicker({mode:'readwrite'});
-   S.bk.folder=true;S.bk.label=window.BKDIR.name;persist();render();toast('Backup folder chosen');autoBackup();return;
-  }catch(e){
-   if(e&&e.name==='AbortError')return;
-   // Embedded previews commonly block directory permissions; switch to a portable download workflow.
-  }
+  try{window.BKDIR=await window.showDirectoryPicker({mode:'readwrite'});S.bk.folder=true;S.bk.label=window.BKDIR.name;persist();render();toast('Backup folder chosen');autoBackup();return}
+  catch(e){if(e&&e.name==='AbortError')return}
  }
- S.bk.folder=false;S.bk.label='Choose destination when saving';persist();render();
- toast('This preview blocks folder access. Tap Back up now, then save the JSON file to your preferred folder or Google Drive.');
+ S.bk.folder=false;S.bk.label='Save backup file to Downloads or Google Drive';persist();
+ toast('Folder picker is not supported here. Choose a destination in the file save dialog.');
+ runBackup(false);
 }
 window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{S.bk.folder=!!ok;S.bk.label=msg||'';render();toast(ok?'Backup folder ready':'No folder chosen');if(ok)autoBackup()};
 window.aureliaNativeDeviceBackupResult=(id,ok,err)=>bkDone(ok,err);window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{S.bk.folder=!!sel;persist()};
@@ -815,13 +811,13 @@ return h.replace('<div class="grid g4">',`<div class="grid" style="margin-bottom
 Object.assign(S,{restaurant:{name:'The Dining Room',phone:'',addr:'',tax:'',upi:'',cur:'₹',gst:0,qr:''},tableGuests:{},tableRooms:{},quickGuest:{},payLinks:{}});
 const restCur=()=>S.restaurant.cur||S.set.cur||'K';
 const rk=n=>restCur()+Math.round(Number(n)||0).toLocaleString('en-US');
-function tableMeta(n){S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};return {name:S.tableGuests[n]||'',room:S.tableRooms[n]||''}}
-function saveTableMeta(n){const name=$('#tg-name')?.value?.trim()||'',phone=$('#tg-phone')?.value?.trim()||'',room=$('#tg-room')?.value||'';S.tableGuests[n]={name,phone};S.tableRooms[n]=room;persist()}
+function tableMeta(n){S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};const saved=S.tableGuests[n];return {name:typeof saved==='string'?saved:(saved?.name||''),phone:typeof saved==='object'?(saved.phone||''):'',room:S.tableRooms[n]||''}}
+function saveTableMeta(n){const name=$('#tg-name')?.value?.trim()||'',phone=$('#tg-phone')?.value?.trim()||'',room=$('#tg-room')?.value||'';S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};S.tableGuests[n]={name,phone};S.tableRooms[n]=room;persist();toast('Customer and billing details saved')}
 // Do not create phantom values or NaN rows if older local data is malformed.
 function cleanTableOrders(){S.t=(Array.isArray(S.t)?S.t:[]).filter(Boolean);S.t.forEach((t,i)=>{t.n=Number(t.n)||i+1;t.s=Math.max(1,Number(t.s)||2);t.o=(Array.isArray(t.o)?t.o:[]).filter(x=>Array.isArray(x)&&x.length>=2&&Number.isFinite(Number(x[1]))).map(x=>[String(x[0]),Number(x[1]),x[2]||'din']);});if(!S.t.length)S.t=[{n:1,s:2,o:[]}];S.tb=Math.max(1,Math.min(S.t.length,Number(S.tb)||1))}
 const oldDining=V.dining;
 V.dining=()=>{cleanTableOrders();const html=oldDining();const t=S.t[S.tb-1],m=tableMeta(t.n),rooms=S.b.filter(b=>b.st==='in');
- const controls=`<div class="card" style="margin-top:14px"><div class="row"><h3>Guest &amp; billing details</h3><span class="tag ready">Restaurant ledger</span></div><div class="lab" style="margin:4px 0 10px">Table ${t.n} · ${t.s} seats. This bill stays separate from hotel folios unless you explicitly post it to an occupied room.</div><label class="fld"><span>Customer full name (printed on bill)</span><input id="tg-name" placeholder="Walk-in customer name" value="${esc(m.name||'')}"></label><label class="fld"><span>Customer phone number (printed on bill)</span><input id="tg-phone" type="tel" inputmode="tel" placeholder="Phone number" value="${esc(m.phone||'')}"></label><label class="fld"><span>Charge destination</span><select id="tg-room"><option value="">Restaurant / walk-in bill (separate)</option>${rooms.map(b=>`<option value="${b.room}" ${m.room===b.room?'selected':''}>Room ${b.room} · ${esc(b.g)}</option>`).join('')}</select></label><button class="btn ghost sm" onclick="saveTableMeta(${t.n});toast('Customer details saved for table ${t.n}')">Save bill details</button></div>`;
+ const controls=`<div class="card" style="margin-top:14px"><div class="row"><h3>Guest &amp; billing details</h3><span class="tag ready">Restaurant ledger</span></div><div class="lab" style="margin:4px 0 10px">Table ${t.n} · ${t.s} seats. This bill stays separate from hotel folios unless you explicitly post it to an occupied room.</div><label class="fld"><span>Customer full name (printed on bill)</span><input id="tg-name" placeholder="Walk-in customer name" value="${esc(m.name||'')}"></label><label class="fld"><span>Customer phone number (printed on bill)</span><input id="tg-phone" type="tel" inputmode="tel" placeholder="Phone number" value="${esc(m.phone||'')}"></label><label class="fld"><span>Charge destination</span><select id="tg-room"><option value="">Restaurant / walk-in bill (separate)</option>${rooms.map(b=>`<option value="${b.room}" ${m.room===b.room?'selected':''}>Room ${b.room} · ${esc(b.g)}</option>`).join('')}</select></label><button class="btn ghost sm" onclick="saveTableMeta(${t.n})">Save bill details</button></div>`;
  return html.replace('</div></div>`', '</div></div>`')+controls;
 };
 // Replace table settlement with clear separate restaurant billing, named guest/phone, invoice and PNG bill.
