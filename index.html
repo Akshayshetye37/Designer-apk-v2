@@ -179,7 +179,20 @@ body::after{display:none!important}
 .cancel-record-main small{color:var(--mu)}
 .refund-status{color:var(--gold)!important;font-weight:600}
 @media(max-width:420px){.grid .card .row[style*="flex-wrap:wrap"]>span[style*="display:flex"]{grid-template-columns:repeat(2,minmax(0,1fr))}.cancel-record{align-items:flex-start}.cancel-record .btn{max-width:120px;white-space:normal}}
-</style></head><body>
+</style>
+<style>
+/* Mobile stays filters and guest action grid */
+.stays-filters{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px!important;overflow:visible!important;margin:10px 0 18px}
+.stays-filters .chip{width:100%;min-width:0;min-height:44px;padding:8px 4px;white-space:normal;line-height:1.15;text-align:center;display:flex;align-items:center;justify-content:center}
+.stays-filters .chip[data-filter="calendar"],.stays-filters .chip[data-filter="cancelled"]{grid-column:auto}
+.stays-filters .chip[data-filter="calendar"]{border-color:rgba(220,198,133,.65)}
+.guest-contact-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important;width:100%;min-width:0}
+.guest-contact-actions .btn{display:flex!important;align-items:center;justify-content:center;width:100%;min-width:0;min-height:44px;padding:8px 6px;white-space:normal;overflow-wrap:anywhere;text-align:center}
+.stays-card-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important;width:100%;min-width:0}
+.stays-card-actions>.btn{display:flex;align-items:center;justify-content:center;width:100%;min-width:0;min-height:46px;padding:8px 6px;white-space:normal;overflow-wrap:anywhere;text-align:center}
+@media(min-width:520px){.stays-filters{grid-template-columns:repeat(5,minmax(0,1fr))}.stays-card-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
+</style>
+</head><body>
 
 <script id="aurelia-safe-storage">
 (function(){
@@ -2593,6 +2606,19 @@ window.setCancellationRefund=function(i,status){
  persist();render();toast('Refund status updated manually');
 };
 
+
+/* Put Calendar and Cancelled bookings together in Stays filters, and ensure every guest card has contact actions. */
+const _staysFinalPolish=V.stays;
+V.stays=function(){
+ if(S.f==='cal')return cal();
+ let html=_staysFinalPolish();
+ html=html.replace('<div class="chips">','<div class="chips stays-filters">');
+ html=html.replace(/<button class="chip" onclick="S\.f='cal';render\(\)">Calendar<\/button>/g,'<button class="chip" data-filter="calendar" onclick="S.f=\'cal\';render()">Calendar</button><button class="chip" data-filter="cancelled" onclick="S.tab=\'more\';S.sub=\'cancelbookings\';render()">Cancelled<br>bookings</button>');
+ html=html.replace(/<div class="row" style="margin-top:14px;flex-wrap:wrap"><span class="lab">([\s\S]*?)<\/span><span style="display:flex;gap:6px">/g,'<div class="stays-card-actions"><span class="lab">$1</span><span class="stays-card-actions">');
+ // Ensure all contact action sets occupy a full grid row.
+ html=html.replace(/<span class="guest-contact-actions">/g,'<span class="guest-contact-actions">');
+ return html;
+};
 </script>
 </body>
 </html>
