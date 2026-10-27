@@ -2519,6 +2519,23 @@ V.stays=function(){
 .rc-legend{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0 16px;color:#b9c6bc;font-size:11px}.rc-legend span{display:flex;align-items:center;gap:6px}.rc-dot{display:inline-block;width:7px;height:7px;border-radius:50%}.rc-dot.occupied{background:#dfc477}.rc-dot.booked{background:#b98d58}.rc-dot.available{background:#567a66}
 .rc-scroll{overflow-x:auto;border:1px solid rgba(220,198,133,.22);border-radius:18px;background:rgba(0,0,0,.11)}.rc-table{width:100%;min-width:680px;border-collapse:separate;border-spacing:0;font-size:11px}.rc-table th,.rc-table td{border-right:1px solid rgba(220,198,133,.1);border-bottom:1px solid rgba(220,198,133,.1);padding:0;text-align:center}.rc-table thead th{height:54px;background:rgba(220,198,133,.06);color:#b9c6bc;font-weight:500}.rc-table thead th span,.rc-table thead th strong{display:block}.rc-table thead th strong{font-size:14px;color:#f1dfb1;margin-top:3px}.rc-table .rc-room{position:sticky;left:0;z-index:2;min-width:82px;text-align:left;padding:10px;background:#123628;color:#f1dfb1}.rc-room strong,.rc-room small{display:block}.rc-room small{color:#9fb1a5;font-size:10px;font-weight:400;margin-top:4px}.rc-table td{height:56px;min-width:42px;cursor:pointer;transition:background .15s}.rc-table td:last-child,.rc-table th:last-child{border-right:0}.rc-table tr:last-child td,.rc-table tr:last-child th{border-bottom:0}.rc-table .rc-empty{background:rgba(255,255,255,.012)}.rc-table .rc-empty:active{background:rgba(220,198,133,.18)}.rc-table .rc-cell{padding:4px 3px}.rc-table .rc-cell span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:76px;margin:auto;color:#fff1d0;font-weight:600}.rc-table .rc-cell small{display:block;font-size:9px;margin-top:4px;color:#e2d2a9}.rc-table .rc-cell.inhouse{background:linear-gradient(145deg,rgba(214,183,105,.38),rgba(214,183,105,.13));box-shadow:inset 0 0 0 1px rgba(231,205,135,.3)}.rc-table .rc-cell.reserved{background:linear-gradient(145deg,rgba(163,115,62,.35),rgba(163,115,62,.12))}.rc-foot{font-size:11px;line-height:1.55;color:#9fb1a5;margin-top:14px}
 @media(max-width:480px){.rc-wrap{padding:14px;border-radius:22px}.rc-heading h2{font-size:25px}.rc-heading p{max-width:270px}.rc-toolbar{padding:8px}.rc-toolbar .btn{padding:9px 10px}.rc-range{font-size:11px}.rc-new{font-size:12px}}
+
+/* Final mobile alignment override */
+.rc-head-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;justify-content:flex-end}
+.rc-head-actions .btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;line-height:1.2;text-align:center;white-space:normal}
+.rc-head-actions .rc-new{flex:1 1 100%}
+.item{display:flex;align-items:center;gap:10px;min-width:0}
+.item .f{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.item>.btn{flex:0 0 auto;align-self:center;min-width:86px}
+#sh .list .item{padding:12px 10px}
+#sh .list .item .danger{display:inline-flex;align-items:center;justify-content:center;min-height:40px}
+@media(max-width:520px){
+ .rc-head-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
+ .rc-head-actions .rc-new{grid-column:1/-1;width:100%}
+ .rc-head-actions .btn{width:100%;min-width:0}
+ .item{gap:8px}
+ .item>.btn{min-width:76px;padding:9px 10px}
+}
 </style>
 
 <script>
@@ -2544,4 +2561,6 @@ window.confirmCancelBooking=function(id){
  const b=S.b[i];S.b.splice(i,1);if(typeof aud==='function')aud('Booking cancelled',String(b.g||'Guest')+' · Room '+String(b.room||'')+' · Booking '+String(b.id));
  if(typeof persist==='function')persist();if(typeof closeS==='function')closeS();S.f='';render();toast('Booking cancelled');
 };
-</body>\n</html>
+</script>
+</body>
+</html>
