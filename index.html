@@ -2521,6 +2521,7 @@ V.stays=function(){
 @media(max-width:480px){.rc-wrap{padding:14px;border-radius:22px}.rc-heading h2{font-size:25px}.rc-heading p{max-width:270px}.rc-toolbar{padding:8px}.rc-toolbar .btn{padding:9px 10px}.rc-range{font-size:11px}.rc-new{font-size:12px}}
 </style>
 
+<script>
 /* UX repair: safe payment-method fallback, stable calendar exit, cancellation, and responsive Stays alignment. */
 window.selectFolioPaymentMethod=window.selectFolioPaymentMethod||function(method){
  const root=document.querySelector('#pan'),chips=root&&root.querySelector('#pm');if(!root||!chips)return;
