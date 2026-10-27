@@ -2623,6 +2623,31 @@ exportBalanceSheet=function(){
  const blob=new Blob([data],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='aurelia-balance-sheet-cancellation-reconciliation.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url)},5000);toast('Balance sheet reconciliation CSV exported');
 };
 
+
+/* Startup recovery: surface runtime failures instead of leaving a blank preview. */
+(function(){
+ function showFatal(message,source,line,col){
+  var box=document.getElementById('aurelia-startup-error');
+  if(!box){
+   box=document.createElement('section');box.id='aurelia-startup-error';
+   box.style.cssText='position:fixed;z-index:2147483647;inset:12px;background:#fff;color:#171717;padding:18px;border:3px solid #c22;border-radius:12px;overflow:auto;font:14px/1.5 system-ui,sans-serif;white-space:pre-wrap';
+   document.body.appendChild(box);
+  }
+  box.textContent='Aurelia could not start. Copy this error and send it:\n\n'+String(message||'Unknown error')+(source?'\nFile: '+source:'')+(line?'\nLine: '+line+(col?':'+col:''):'');
+ }
+ window.addEventListener('error',function(e){showFatal(e.message||e.error,e.filename,e.lineno,e.colno)});
+ window.addEventListener('unhandledrejection',function(e){showFatal(e.reason&&e.reason.stack||e.reason||'Unhandled promise rejection')});
+ function start(){
+  try{
+   if(typeof render!=='function')throw new Error('The main render() function is not available. The main application script did not initialize.');
+   render();
+   var box=document.getElementById('aurelia-startup-error');if(box)box.remove();
+  }catch(e){showFatal(e&&e.stack||e)}
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
+ else setTimeout(start,0);
+})();
+
 /* Ensure the latest financial totals are available in the P&L export and persist the initial fix. */
 try{persist()}catch(e){}
 </script>
