@@ -559,19 +559,25 @@ const offOf=s=>{const a=new Date();a.setHours(0,0,0,0);return Math.round((new Da
 const day0=()=>{const d=new Date();d.setHours(0,0,0,0);return Math.round(d/864e5)};
 const PHOTO_DB='aurelia_photo_archive_v1';
 const PHOTO_FALLBACK_PREFIX='aurelia_photo_fallback:';
+/* Some sandboxed HTML previews deny IndexedDB and localStorage. Keep a session-only fallback there; it is not a substitute for device storage or a persistent backup. */
+const PHOTO_MEMORY_FALLBACK=new Map();
 function photoDb(){return new Promise((resolve,reject)=>{try{if(!window.indexedDB||typeof indexedDB.open!=='function')throw new Error('IndexedDB unavailable');const q=indexedDB.open(PHOTO_DB,1);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains('originals'))q.result.createObjectStore('originals')};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||new Error('Photo storage unavailable'))}catch(e){reject(e)}})}
 async function photoPut(key,data){
  try{const db=await photoDb();await new Promise((resolve,reject)=>{const tx=db.transaction('originals','readwrite');tx.objectStore('originals').put(data,key);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Could not store original photo'));tx.onabort=()=>reject(tx.error||new Error('Photo storage transaction aborted'))});db.close();return true}
- catch(e){try{localStorage.setItem(PHOTO_FALLBACK_PREFIX+key,data);return true}catch(f){console.error('IndexedDB and fallback photo storage failed',e,f);throw f}}
+ catch(e){try{localStorage.setItem(PHOTO_FALLBACK_PREFIX+key,data);return true}catch(f){PHOTO_MEMORY_FALLBACK.set(key,data);console.warn('Persistent photo storage is blocked in this preview; using session-only memory fallback. Photos will not survive reload unless exported in a backup.',e);return true}}
 }
-async function photoGet(key){if(!key)return null;try{const db=await photoDb();const data=await new Promise((resolve,reject)=>{const q=db.transaction('originals').objectStore('originals').get(key);q.onsuccess=()=>resolve(q.result||null);q.onerror=()=>reject(q.error||new Error('Could not read original photo'))});db.close();if(data)return data}catch(e){console.warn('IndexedDB photo read unavailable; checking fallback storage',e)}try{return localStorage.getItem(PHOTO_FALLBACK_PREFIX+key)||null}catch(e){return null}}
+async function photoGet(key){if(!key)return null;try{const db=await photoDb();const data=await new Promise((resolve,reject)=>{const q=db.transaction('originals').objectStore('originals').get(key);q.onsuccess=()=>resolve(q.result||null);q.onerror=()=>reject(q.error||new Error('Could not read original photo'))});db.close();if(data)return data}catch(e){}try{const fallback=localStorage.getItem(PHOTO_FALLBACK_PREFIX+key);if(fallback)return fallback}catch(e){}return PHOTO_MEMORY_FALLBACK.get(key)||null}
 async function photoArchive(){
- try{const db=await photoDb();const out=await new Promise((resolve,reject)=>{const tx=db.transaction('originals','readonly'),q=tx.objectStore('originals').getAllKeys(),v=tx.objectStore('originals').getAll();tx.oncomplete=()=>{const a={};q.result.forEach((k,i)=>a[k]=v.result[i]);resolve(a)};tx.onerror=()=>reject(tx.error||new Error('Could not prepare photo archive'))});db.close();for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(PHOTO_FALLBACK_PREFIX))out[k.slice(PHOTO_FALLBACK_PREFIX.length)]=localStorage.getItem(k)}return out}
- catch(e){const out={};try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(PHOTO_FALLBACK_PREFIX))out[k.slice(PHOTO_FALLBACK_PREFIX.length)]=localStorage.getItem(k)}if(Object.keys(out).length)return out}catch(_){}throw e}
+ const out={};
+ try{const db=await photoDb();await new Promise((resolve,reject)=>{const tx=db.transaction('originals','readonly'),q=tx.objectStore('originals').getAllKeys(),v=tx.objectStore('originals').getAll();tx.oncomplete=()=>{q.result.forEach((k,i)=>out[k]=v.result[i]);resolve()};tx.onerror=()=>reject(tx.error||new Error('Could not prepare photo archive'))});db.close()}catch(e){}
+ try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(PHOTO_FALLBACK_PREFIX))out[k.slice(PHOTO_FALLBACK_PREFIX.length)]=localStorage.getItem(k)}}catch(e){}
+ PHOTO_MEMORY_FALLBACK.forEach((v,k)=>out[k]=v);
+ if(Object.keys(out).length||!window.indexedDB)return out;
+ try{await photoDb();return out}catch(e){return out}
 }
 async function photoRestore(archive){if(!archive||typeof archive!=='object'||Array.isArray(archive))throw new Error('Backup photo archive is invalid');const entries=Object.entries(archive);for(const [k,v] of entries){if(!k||typeof v!=='string'||!/^data:image\//i.test(v))throw new Error('Photo archive contains an invalid original image')}
  try{const db=await photoDb();try{await new Promise((resolve,reject)=>{const tx=db.transaction('originals','readwrite'),st=tx.objectStore('originals');entries.forEach(([k,v])=>st.put(v,k));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Could not restore original photos'));tx.onabort=()=>reject(tx.error||new Error('Photo restore was cancelled'))})}finally{db.close()}}
- catch(e){for(const [k,v] of entries)localStorage.setItem(PHOTO_FALLBACK_PREFIX+k,v)}
+ catch(e){for(const [k,v] of entries){try{localStorage.setItem(PHOTO_FALLBACK_PREFIX+k,v)}catch(_){PHOTO_MEMORY_FALLBACK.set(k,v)}}}
  return entries.length}
 
 function openOriginalPhoto(key,label){photoGet(key).then(data=>{if(!data){toast('Original photo is not on this device. Restore a backup containing the photo archive.');return}openS('<h2 class="foil">'+esc(label||'Original ID photo')+'</h2><img src="'+data+'" alt="Original ID photo" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><p class="lab">Full-resolution original loaded on demand from the private photo archive.</p><button class="btn ghost" onclick="closeS()">Close</button>')}).catch(()=>toast('Could not load the original photo'))}
@@ -2018,20 +2024,7 @@ inv=function(i){
   panel.appendChild(actions);
  }
 };
-const _ocrPanelForIdType=ocrPanel;
-ocrPanel=function(){return _ocrPanelForIdType().replace('Recognise name &amp; ID number','Recognise ID type, full name &amp; ID number')};
-const _runOcrForIdType=runIdOcr;
-runIdOcr=async function(){
- const f=$('#ocr-file')?.files?.[0];if(!f){await _runOcrForIdType();return}
- // Existing OCR engine is retained; this pass additionally classifies likely document type.
- await _runOcrForIdType();
- setTimeout(()=>{
-  const out=$('#ocr-result');if(!out)return;
-  const raw=out.innerText||'';
-  const type=detectIndianIdType(raw);
-  if(!out.innerHTML.includes('Proposed ID type')){const row=document.createElement('div');row.className='ln';row.innerHTML='<span>Proposed ID type</span><b>'+esc(type)+'</b>';out.insertBefore(row,out.firstChild)}
- },250);
-};
+/* Removed an obsolete OCR wrapper that referenced missing ocrPanel/runIdOcr functions. */
 
 </script>
 
