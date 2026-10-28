@@ -788,6 +788,7 @@ async function sha256Hex(text){
  throw new Error('SHA-256 verification is unavailable in this WebView.');
 }
 const cloneSnapshot=()=>JSON.parse(JSON.stringify(Object.fromEntries(DK.map(k=>[k,S[k]]))));
+const cloneLiveSnapshot=()=>{const out={};DK.forEach(k=>{try{out[k]=typeof structuredClone==='function'?structuredClone(S[k]):JSON.parse(JSON.stringify(S[k]))}catch(e){out[k]=JSON.parse(JSON.stringify(S[k]))}});return out};
 async function createBackupSnapshot(){
  const dataHash=curHash(),data=cloneSnapshot();
  const originals=await photoArchive();
@@ -1025,7 +1026,7 @@ async function restoreGo(){
  const validBookings=[];
  for(const booking of restored.b){const normal=normaliseImportedBooking(booking);if(!normal){toast('Restore cancelled: a booking is invalid. Current data was not changed.');return}validBookings.push(normal)}
  restored.b=validBookings;
- const liveBefore=cloneSnapshot();
+ const liveBefore=cloneLiveSnapshot(),oldId=id;
  let oldPhotos;
  try{oldPhotos=await photoArchive()}catch(e){toast('Restore cancelled: could not create a rollback copy of current photos.');return}
  try{
@@ -1042,7 +1043,7 @@ async function restoreGo(){
  }catch(e){
   console.error('Transactional restore failed',e);
   try{if(oldPhotos)await photoRestore(oldPhotos)}catch(photoRollbackError){console.error('Photo rollback failed',photoRollbackError)}
-  DK.forEach(k=>{if(liveBefore[k]!==undefined)S[k]=liveBefore[k]});
+  DK.forEach(k=>{if(liveBefore[k]!==undefined)S[k]=liveBefore[k]});id=oldId;
   try{persist()}catch(rollbackError){console.error('State rollback failed',rollbackError)}
   toast('Restore failed and rollback was attempted. Do not clear app data; check the backup and device storage.');
  }
