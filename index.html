@@ -2693,8 +2693,9 @@ window.confirmCancelBooking=function(id,refundStatus){
  const i=(S.b||[]).findIndex(function(x){return Number(x.id)===Number(id)});
  if(i===-1){toast('Booking not found');return}
  const b=S.b[i];
+ const paidSnapshot=typeof cancellationPaidAmount==='function'?cancellationPaidAmount(b):Math.max(0,Number(b.p)||0);
  S.cancelled=S.cancelled||[];
- S.cancelled.unshift({...b,cancelledAt:new Date().toISOString(),cancelledStatus:refundStatus==='refund_pending'?'refund_pending':'no_refund',refundStatus:refundStatus==='refund_pending'?'Pending manual admin review':'No refund',cancelledFromStatus:b.st});
+ S.cancelled.unshift({...b,original_amount_paid:paidSnapshot,paymentSnapshot:Array.isArray(b.payments)?b.payments.map(p=>({...p})):Array.isArray(b.pays)?b.pays.map(p=>({...p})):[],cancelledAt:new Date().toISOString(),cancelledStatus:refundStatus==='refund_pending'?'refund_pending':'no_refund',refundStatus:refundStatus==='refund_pending'?'Pending manual admin review':'No refund',cancelledFromStatus:b.st});
  S.b.splice(i,1);
  if(typeof aud==='function')aud('Booking cancelled',String(b.g||'Guest')+' · Room '+String(b.room||'')+' · '+(refundStatus==='refund_pending'?'Refund pending manual admin review':'No refund'));
  if(typeof persist==='function')persist();
@@ -2704,7 +2705,14 @@ window.confirmCancelBooking=function(id,refundStatus){
 };
 SUB.cancelbookings=()=>hd('Cancelled bookings')+'<div class="card"><div class="lab">Cancelled reservations are archived here. Refunds are not automatic. Admin must manually review and update the refund status.</div><div class="list">'+((Array.isArray(S.cancelled)?S.cancelled:[]).map(function(b,i){const status=b.refundStatus||((b.cancelledStatus==='refund_pending')?'Pending manual admin review':'No refund');return '<div class="cancel-record"><div class="cancel-record-main"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · Cancelled '+esc(String(b.cancelledAt||'').slice(0,10)||'Date not recorded')+'</small><small class="refund-status">'+esc(status)+'</small></div>'+'<button class="btn sm" onclick="setCancellationRefund('+i+')">Manage refund / accounting</button>'+'</div>'}).join('')||'<div class="empty">No cancelled bookings yet.</div>')+'</div></div><button class="btn ghost" style="margin-top:12px" onclick="S.sub=null;render()">← Back to More</button>';
 S.financialLedger=Array.isArray(S.financialLedger)?S.financialLedger:[];
-function cancellationPaidAmount(b){const ps=(Array.isArray(b.pays)?b.pays:[]).reduce((s,p)=>s+Math.max(0,Number(p.a)||0),0);return Math.max(0,Math.round((Number(b.original_amount_paid)||Number(b.p)||ps||0)*100)/100)}
+function cancellationPaidAmount(b){
+ const sources=[b&&b.paymentSnapshot,b&&b.payments,b&&b.pays];
+ let recorded=0;
+ sources.forEach(list=>{if(Array.isArray(list)){const total=list.reduce((sum,p)=>sum+Math.max(0,Number(p&& (p.a??p.amount??p.value))||0),0);if(total>recorded)recorded=total}});
+ const stored=Number(b&&b.original_amount_paid),legacy=Number(b&&b.p);
+ const amount=Number.isFinite(stored)&&stored>0?stored:Math.max(recorded,Number.isFinite(legacy)?legacy:0);
+ return Math.max(0,Math.round(amount*100)/100);
+}
 function cancellationJournal(reference,lines,meta){const dr=lines.reduce((s,x)=>s+Number(x.debit||0),0),cr=lines.reduce((s,x)=>s+Number(x.credit||0),0);if(Math.abs(dr-cr)>.009)throw Error('Journal entry is not balanced');S.financialLedger.push({id:'JE-'+Date.now(),reference,at:new Date().toISOString(),...meta,lines})}
 window.setCancellationRefund=function(i){
  const b=(S.cancelled||[])[Number(i)];if(!b){toast('Cancelled booking not found');return}
@@ -2723,8 +2731,13 @@ window.commitCancellationRefund=function(i){
  if(action==='no_refund'&&refund!==0){toast('Set refund to zero for No refund');return}
  if(action==='full'&&Math.abs(refund-paid)>.009){toast('Full refund must equal original amount paid');return}
  if(action==='partial'&&(refund<=0||refund>=paid)){toast('Partial refund must be between zero and full amount');return}
- if(b.cancellationAccountingCommitted){toast('This cancellation has already been committed. Avoid duplicate journal entries.');return}
- const retained=Math.round((paid-refund)*100)/100,ref='CANCEL-'+String(b.id||i),lines=[];
+ const ref='CANCEL-'+String(b.id||('GUEST-'+String(b.g||'').replace(/[^a-z0-9]/gi,'').slice(0,18)+'-'+String(b.cancelledAt||i).replace(/[^0-9]/g,'').slice(0,14)));
+ const priorEntries=(S.financialLedger||[]).filter(e=>e.reference===ref&&e.bookingId=== (b.id||null));
+ if(b.cancellationAccountingCommitted&&priorEntries.length){toast('This cancellation already has journal entries. Use the existing journal instead of posting it twice.');return}
+ // Repair stale legacy flags: earlier versions could save the committed flag without saving a journal entry.
+ if(b.cancellationAccountingCommitted&&!priorEntries.length){b.cancellationAccountingCommitted=false;b.refundPayableJournalRecorded=false;b.retentionJournalRecorded=false}
+ if(paid<=0&&(refund>0||action==='no_refund'||action==='partial'||action==='full')){toast('No payment is recorded for this booking. Verify the original receipt and payment records before posting a refund or retention.');return}
+ const retained=Math.round((paid-refund)*100)/100,lines=[];
  if(action==='pending'&&refund>0){
   lines.push({account:'Guest Advances Liability',debit:refund,credit:0},{account:'Refunds Payable Liability',debit:0,credit:refund});
  }else{
