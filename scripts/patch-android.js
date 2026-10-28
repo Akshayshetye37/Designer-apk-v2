@@ -282,7 +282,10 @@ public class MainActivity extends BridgeActivity {
           java.util.LinkedHashMap<String, String> incoming = new java.util.LinkedHashMap<>();
           java.util.LinkedHashMap<String, String> previous = new java.util.LinkedHashMap<>();
           java.util.LinkedHashMap<String, java.io.File> staged = new java.util.LinkedHashMap<>();
-          java.io.File stageDir = new java.io.File(photoDir(), ".restore-" + System.currentTimeMillis());
+          java.io.File archiveDir = photoDir();
+          java.io.File[] existingPhotos = archiveDir.listFiles((dir, name) -> name.endsWith(".txt"));
+          if (existingPhotos != null) for (java.io.File existing : existingPhotos) previous.put(existing.getName().substring(0, existing.getName().length() - 4), readText(existing));
+          java.io.File stageDir = new java.io.File(archiveDir, ".restore-" + System.currentTimeMillis());
           if (!stageDir.mkdirs()) throw new IllegalStateException("Could not create photo restore staging area");
           try {
             java.util.Iterator<String> keys = archive.keys();
@@ -290,8 +293,6 @@ public class MainActivity extends BridgeActivity {
               String key = keys.next(), data = archive.optString(key, "");
               if (key == null || !key.matches("[A-Za-z0-9_-]{1,120}") || !data.startsWith("data:image/")) throw new IllegalArgumentException("Invalid archived image or photo key");
               incoming.put(key, data);
-              java.io.File target = photoFile(key);
-              previous.put(key, target.isFile() ? readText(target) : null);
               java.io.File temp = new java.io.File(stageDir, key + ".txt");
               writeText(temp, data);
               if (!data.equals(readText(temp))) throw new IllegalStateException("Staged photo verification failed for " + key);
@@ -302,15 +303,24 @@ public class MainActivity extends BridgeActivity {
               writeText(photoFile(entry.getKey()), data);
               if (!data.equals(readText(photoFile(entry.getKey())))) throw new IllegalStateException("Restored photo verification failed for " + entry.getKey());
             }
+            java.io.File[] currentPhotos = archiveDir.listFiles((dir, name) -> name.endsWith(".txt"));
+            if (currentPhotos != null) for (java.io.File current : currentPhotos) {
+              String key = current.getName().substring(0, current.getName().length() - 4);
+              if (!incoming.containsKey(key) && !current.delete()) throw new IllegalStateException("Could not remove photo absent from restored archive: " + key);
+            }
+            java.io.File[] verifiedPhotos = archiveDir.listFiles((dir, name) -> name.endsWith(".txt"));
+            int verifiedCount = verifiedPhotos == null ? 0 : verifiedPhotos.length;
+            if (verifiedCount != incoming.size()) throw new IllegalStateException("Restored photo archive count does not match the backup.");
             photoResult(requestId, true, "restored");
           } catch (Exception restoreError) {
             Exception rollbackError = null;
             for (java.util.Map.Entry<String, String> entry : previous.entrySet()) {
-              try {
-                java.io.File target = photoFile(entry.getKey());
-                if (entry.getValue() == null) { if (target.exists() && !target.delete()) throw new IllegalStateException("Could not remove partially restored photo " + entry.getKey()); }
-                else writeText(target, entry.getValue());
-              } catch (Exception e) { rollbackError = e; }
+              try { writeText(photoFile(entry.getKey()), entry.getValue()); }
+              catch (Exception e) { rollbackError = e; }
+            }
+            for (String key : incoming.keySet()) if (!previous.containsKey(key)) {
+              try { java.io.File target = photoFile(key); if (target.exists() && !target.delete()) throw new IllegalStateException("Could not remove partially restored photo " + key); }
+              catch (Exception e) { rollbackError = e; }
             }
             if (rollbackError != null) throw new IllegalStateException("Photo restore failed and rollback was incomplete: " + rollbackError.getMessage(), restoreError);
             throw restoreError;
