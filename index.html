@@ -767,7 +767,7 @@ function photoKeysIn(value,out=new Set(),seen=new Set()){if(!value||typeof value
 function validatePhotoArchive(data,archive){const keys=photoKeysIn(data),missing=[];if(!archive||typeof archive!=='object'||Array.isArray(archive))archive={};for(const key of keys){if(typeof archive[key]!=='string'||!/^data:image\//i.test(archive[key]))missing.push(key)}if(missing.length)throw new Error(missing.length+' original ID photo(s) are missing from the archive. No backup/restore was completed.');return keys.size}
 async function sha256Hex(text){
  if(window.crypto&&crypto.subtle&&window.TextEncoder){const bytes=new TextEncoder().encode(text),digest=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')}
- return hashS(text);
+ throw new Error('SHA-256 verification is unavailable in this WebView.');
 }
 const cloneSnapshot=()=>JSON.parse(JSON.stringify(Object.fromEntries(DK.map(k=>[k,S[k]]))));
 async function createBackupSnapshot(){
