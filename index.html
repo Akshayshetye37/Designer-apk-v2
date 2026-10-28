@@ -953,19 +953,43 @@ async function restoreGo(){
   toast('JSON import: '+roomsAdded+' rooms, '+ga+' guests, '+ba+' bookings, '+expensesAdded+' expenses, '+inventoryAdded+' stock items; '+sk+' invalid/duplicate rows skipped.'+(roomsCreatedForBooking?' Created '+roomsCreatedForBooking+' placeholder room(s); review their room type and rate.':''));
   return;
  }
- // Full Aurelia backup: validate state and all referenced original photos before changing live records.
- if(!Array.isArray(d.rooms)||!Array.isArray(d.b)){toast('Backup is missing the room or booking list. Current data was not changed.');return}
+ // Full Aurelia backup: validate completely, retain rollback data, then commit.
+ if(!Array.isArray(d.rooms)||!Array.isArray(d.b)||!d.set||typeof d.set!=='object'){
+  toast('Backup is missing required application state. Current data was not changed.');return
+ }
  const sourceData=d,archive=d.photoArchive||{};
+ if(sourceData.integrity){
+  try{
+   const integrity=sourceData.integrity,copy={...sourceData};delete copy.integrity;
+   if(integrity.algorithm!=='SHA-256'||typeof integrity.digest!=='string'||await sha256Hex(JSON.stringify(copy))!==integrity.digest)throw new Error('Backup checksum does not match its contents.');
+  }catch(e){toast('Restore cancelled: '+(e.message||'backup integrity verification failed'));return}
+ }
  try{validatePhotoArchive(sourceData,archive)}catch(e){toast('Restore cancelled: '+e.message);return}
- try{if(Object.keys(archive).length)await photoRestore(archive)}catch(e){console.error('Photo archive restore failed',e);toast('Restore cancelled: original photos could not be restored. Current guest and booking records were not changed.');return}
  const restored={...d,rooms:d.rooms,b:d.b,g:Array.isArray(d.g)?d.g:[],t:Array.isArray(d.t)?d.t:[],exp:Array.isArray(d.exp)?d.exp:[],inv:Array.isArray(d.inv)?d.inv:[],aud:Array.isArray(d.aud)?d.aud:[],hist:Array.isArray(d.hist)?d.hist:[0,0,0,0,0,0]};
- const validBookings=[],invalidBookings=[];
- restored.b.forEach(x=>{const b=normaliseImportedBooking(x);if(b)validBookings.push(b);else invalidBookings.push(x)});
+ const validBookings=[];
+ for(const booking of restored.b){const normal=normaliseImportedBooking(booking);if(!normal){toast('Restore cancelled: a booking is invalid. Current data was not changed.');return}validBookings.push(normal)}
  restored.b=validBookings;
- DK.forEach(k=>{if(restored[k]!==undefined)S[k]=restored[k]});
- ['rooms','b','g','t','exp','inv','aud'].forEach(k=>{if(!Array.isArray(S[k]))S[k]=[]});
- id=Math.max(id,0,...S.b.map(b=>+b.id||0));
- S.rst=null;S.rstMode=null;persist();location.reload();
+ const liveBefore=cloneSnapshot();
+ let oldPhotos;
+ try{oldPhotos=await photoArchive()}catch(e){toast('Restore cancelled: could not create a rollback copy of current photos.');return}
+ try{
+  if(Object.keys(archive).length)await photoRestore(archive);
+  const verifiedPhotos=await photoArchive();
+  validatePhotoArchive(restored,verifiedPhotos);
+  DK.forEach(k=>{if(restored[k]!==undefined)S[k]=restored[k]});
+  ['rooms','b','g','t','exp','inv','aud'].forEach(k=>{if(!Array.isArray(S[k]))throw new Error('Restored '+k+' data is invalid')});
+  id=Math.max(id,0,...S.b.map(b=>+b.id||0));
+  persist();
+  const saved=JSON.parse((window.__aureliaStorage||localStorage).getItem(SK)||'null');
+  if(!saved||DK.some(k=>JSON.stringify(saved[k])!==JSON.stringify(S[k])))throw new Error('Saved application state did not pass read-back verification.');
+  S.rst=null;S.rstMode=null;location.reload();
+ }catch(e){
+  console.error('Transactional restore failed',e);
+  try{if(oldPhotos&&Object.keys(oldPhotos).length)await photoRestore(oldPhotos)}catch(photoRollbackError){console.error('Photo rollback failed',photoRollbackError)}
+  DK.forEach(k=>{if(liveBefore[k]!==undefined)S[k]=liveBefore[k]});
+  try{persist()}catch(rollbackError){console.error('State rollback failed',rollbackError)}
+  toast('Restore failed and rollback was attempted. Do not clear app data; check the backup and device storage.');
+ }
 }
 const useMenu=m=>{Object.keys(MENU).forEach(k=>delete MENU[k]);Object.assign(MENU,m);S.menu=MENU};
 function persist(){try{const o={tab:S.tab,bk:S.bk};DK.forEach(k=>o[k]=S[k]);(window.__aureliaStorage||localStorage).setItem(SK,JSON.stringify(o))}catch(e){if(!S.qw){S.qw=1;toast('Device storage is full. Back up, then remove old items.')}}}
