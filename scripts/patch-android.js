@@ -131,6 +131,22 @@ public class MainActivity extends BridgeActivity {
   private void recoveryResult(String id, boolean ok, String payload) {
     js("window.aureliaNativeRecoveryBackupResult && window.aureliaNativeRecoveryBackupResult(" + q(id) + "," + ok + "," + q(payload) + ")");
   }
+  private boolean hasBackupForHash(String dataHash) throws Exception {
+    String saved = prefs.getString("backup_tree_uri", "");
+    if (saved.isEmpty()) return false;
+    Uri tree = Uri.parse(saved);
+    Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+    String[] projection = { DocumentsContract.Document.COLUMN_DISPLAY_NAME };
+    try (Cursor cursor = getContentResolver().query(children, projection, null, null, null)) {
+      if (cursor == null) throw new IllegalStateException("The selected backup folder cannot be read.");
+      int nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+      while (cursor.moveToNext()) {
+        String name = cursor.getString(nameCol);
+        if (name != null && name.startsWith("aurelia-backup-") && name.endsWith("-" + dataHash + ".json")) return true;
+      }
+    }
+    return false;
+  }
   private String readLatestBackupFromSelectedFolder() throws Exception {
     String saved = prefs.getString("backup_tree_uri", "");
     if (saved.isEmpty()) throw new IllegalStateException("No backup folder is selected.");
@@ -397,8 +413,13 @@ public class MainActivity extends BridgeActivity {
               recognizer.close();
             });
         } else if ("deviceBackupStatus".equals(type)) {
-          boolean selected = !prefs.getString("backup_tree_uri", "").isEmpty();
-          js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + "," + selected + ")");
+          boolean selected = false, backupExists = false;
+          try {
+            selected = !prefs.getString("backup_tree_uri", "").isEmpty();
+            if (selected) backupExists = hasBackupForHash(obj.optString("hash", ""));
+          } catch (Exception folderError) { selected = false; backupExists = false; }
+          final boolean folderSelected = selected, matchingBackupExists = backupExists;
+          js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + "," + folderSelected + "," + matchingBackupExists + ")");
         } else if ("recoverLatestBackup".equals(type)) {
           backupExecutor.execute(() -> {
             try { recoveryResult(requestId, true, readLatestBackupFromSelectedFolder()); }
