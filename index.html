@@ -2736,7 +2736,7 @@ window.commitCancellationRefund=function(i){
  if(b.cancellationAccountingCommitted&&priorEntries.length){toast('This cancellation already has journal entries. Use the existing journal instead of posting it twice.');return}
  // Repair stale legacy flags: earlier versions could save the committed flag without saving a journal entry.
  if(b.cancellationAccountingCommitted&&!priorEntries.length){b.cancellationAccountingCommitted=false;b.refundPayableJournalRecorded=false;b.retentionJournalRecorded=false}
- if(paid<=0&&(refund>0||action==='no_refund'||action==='partial'||action==='full')){toast('No payment is recorded for this booking. Verify the original receipt and payment records before posting a refund or retention.');return}
+ if(paid<=0&&(refund>0||action==='partial'||action==='full')){toast('No payment is recorded for this booking. Verify the original receipt and payment records before posting a refund.');return}
  const retained=Math.round((paid-refund)*100)/100,lines=[];
  if(action==='pending'&&refund>0){
   lines.push({account:'Guest Advances Liability',debit:refund,credit:0},{account:'Refunds Payable Liability',debit:0,credit:refund});
