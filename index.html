@@ -844,7 +844,7 @@ async function runBackup(auto){
     if(await (await final.getFile()).text()!==snap.payload)throw new Error('Published backup read-back verification failed');
     try{await saveToDir.removeEntry(stagingName)}catch(_){}
     let retentionWarning='';
-    try{await pruneBrowserBackups(saveToDir,final,3)}catch(cleanupError){console.error('Backup saved but retention cleanup failed',cleanupError);retentionWarning='WARN:Backup saved and verified, but retention cleanup could not finish. Existing backups were preserved.'}
+    try{await pruneBrowserBackups(saveToDir,final,3)}catch(cleanupError){console.error('Backup saved but retention cleanup failed',cleanupError);retentionWarning='WARN:Backup saved and verified, but retention cleanup was incomplete. Check the folder; older backup files may remain.'}
     bkDone(true,retentionWarning);return;
    }catch(e){try{await saveToDir.removeEntry(stagingName)}catch(_){}throw e}
   }
