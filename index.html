@@ -851,8 +851,9 @@ window.aureliaNativeDeviceBackupResult=(id,ok,err)=>{if(!BKB||String(id)!==Strin
 window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{if(pendingBackupFolderRequestId&&String(id)!==String(pendingBackupFolderRequestId))return;S.bk.folder=!!sel;persist()};
 function restoreF(el){
  const f=el.files&&el.files[0];if(!f)return;
- f.text().then(t=>{
+ f.text().then(async t=>{
   const raw=JSON.parse(t);
+  if(raw&&raw.integrity){const meta=raw.integrity,copy={...raw};delete copy.integrity;if(meta.algorithm!=='SHA-256'||typeof meta.digest!=='string'||await sha256Hex(JSON.stringify(copy))!==meta.digest)throw new Error('Backup checksum does not match its contents.')}
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('The selected JSON file must contain an object.');
   const candidates=[raw,raw.data,raw.payload,raw.backup,raw.export,raw.records].filter(x=>x&&typeof x==='object'&&!Array.isArray(x));
   const arrays=x=>({
