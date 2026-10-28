@@ -2679,7 +2679,7 @@ window.confirmCancelBooking=function(id,refundStatus){
  S.f='';S.sub='cancelbookings';S.tab='more';render();
  toast(refundStatus==='refund_pending'?'Booking cancelled · Refund requires admin action':'Booking cancelled · No refund');
 };
-SUB.cancelbookings=()=>hd('Cancelled bookings')+'<div class="card"><div class="lab">Cancelled reservations are archived here. Refunds are not automatic. Admin must manually review and update the refund status.</div><div class="list">'+((Array.isArray(S.cancelled)?S.cancelled:[]).map(function(b,i){const status=b.refundStatus||((b.cancelledStatus==='refund_pending')?'Pending manual admin review':'No refund');return '<div class="cancel-record"><div class="cancel-record-main"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · Cancelled '+esc(String(b.cancelledAt||'').slice(0,10)||'Date not recorded')+'</small><small class="refund-status">'+esc(status)+'</small></div>'+(b.cancelledStatus==='refund_pending'?'<button class="btn sm" onclick="setCancellationRefund('+i+',\'refunded\')">Mark refunded</button>':'<span class="tag ready">No refund</span>')+'</div>'}).join('')||'<div class="empty">No cancelled bookings yet.</div>')+'</div></div><button class="btn ghost" style="margin-top:12px" onclick="S.sub=null;render()">← Back to More</button>';
+SUB.cancelbookings=()=>hd('Cancelled bookings')+'<div class="card"><div class="lab">Cancelled reservations are archived here. Refunds are not automatic. Admin must manually review and update the refund status.</div><div class="list">'+((Array.isArray(S.cancelled)?S.cancelled:[]).map(function(b,i){const status=b.refundStatus||((b.cancelledStatus==='refund_pending')?'Pending manual admin review':'No refund');return '<div class="cancel-record"><div class="cancel-record-main"><b>'+esc(b.g||'Guest')+' · Room '+esc(b.room)+'</b><small>'+fd(b.in)+' – '+fd(b.out)+' · Cancelled '+esc(String(b.cancelledAt||'').slice(0,10)||'Date not recorded')+'</small><small class="refund-status">'+esc(status)+'</small></div>'+'<button class="btn sm" onclick="setCancellationRefund('+i+')">Manage refund / accounting</button>'+'</div>'}).join('')||'<div class="empty">No cancelled bookings yet.</div>')+'</div></div><button class="btn ghost" style="margin-top:12px" onclick="S.sub=null;render()">← Back to More</button>';
 S.financialLedger=Array.isArray(S.financialLedger)?S.financialLedger:[];
 function cancellationPaidAmount(b){const ps=(Array.isArray(b.pays)?b.pays:[]).reduce((s,p)=>s+Math.max(0,Number(p.a)||0),0);return Math.max(0,Math.round((Number(b.original_amount_paid)||Number(b.p)||ps||0)*100)/100)}
 function cancellationJournal(reference,lines,meta){const dr=lines.reduce((s,x)=>s+Number(x.debit||0),0),cr=lines.reduce((s,x)=>s+Number(x.credit||0),0);if(Math.abs(dr-cr)>.009)throw Error('Journal entry is not balanced');S.financialLedger.push({id:'JE-'+Date.now(),reference,at:new Date().toISOString(),...meta,lines})}
@@ -2702,13 +2702,18 @@ window.commitCancellationRefund=function(i){
  if(action==='partial'&&(refund<=0||refund>=paid)){toast('Partial refund must be between zero and full amount');return}
  if(b.cancellationAccountingCommitted){toast('This cancellation has already been committed. Avoid duplicate journal entries.');return}
  const retained=Math.round((paid-refund)*100)/100,ref='CANCEL-'+String(b.id||i),lines=[];
- if(action==='pending'&&refund>0){lines.push({account:'Guest Advances Liability',debit:refund,credit:0},{account:'Refunds Payable Liability',debit:0,credit:refund})}
- else{
-  if(refund>0)lines.push({account:'Guest Advances Liability',debit:refund,credit:0},{account:'Cash & Bank',debit:0,credit:refund});
+ if(action==='pending'&&refund>0){
+  lines.push({account:'Guest Advances Liability',debit:refund,credit:0},{account:'Refunds Payable Liability',debit:0,credit:refund});
+ }else{
+  if(refund>0){
+   if(b.refundPayableJournalRecorded)lines.push({account:'Refunds Payable Liability',debit:refund,credit:0},{account:'Cash & Bank',debit:0,credit:refund});
+   else lines.push({account:'Guest Advances Liability',debit:refund,credit:0},{account:'Cash & Bank',debit:0,credit:refund});
+  }
   if(retained>0)lines.push({account:'Guest Advances Liability',debit:retained,credit:0},{account:'Cancellation Revenue',debit:0,credit:retained});
  }
- if(lines.length)cancellationJournal(ref,lines,{kind:action==='pending'?'refund_pending':'cancellation_settlement',bookingId:b.id||null,guest:b.g||'',originalAmountPaid:paid,refundAmount:refund,retentionAmount:retained,refundDate:date,paymentMethod:method});
- b.original_amount_paid=paid;b.refund_amount=refund;b.retention_fee_retained=retained;b.refund_date=date;b.payment_method=method;b.cancelledStatus=action==='no_refund'?'no_refund':action==='pending'?'refund_pending':action==='partial'?'partially_refunded':'refunded';b.refundStatus=action==='no_refund'?'No refund':action==='pending'?'Pending refund approval/payment':action==='partial'?'Partially refunded':'Refund marked as completed';b.cancellationAccountingCommitted=true;b.refundRecordedAt=(action==='partial'||action==='full')?new Date().toISOString():null;
+ if(lines.length)cancellationJournal(ref,lines,{kind:action==='pending'?'refund_pending':b.refundPayableJournalRecorded?'refund_paid_and_retention':'cancellation_settlement',bookingId:b.id||null,guest:b.g||'',originalAmountPaid:paid,refundAmount:refund,retentionAmount:retained,refundDate:date,paymentMethod:method});
+ if(action==='pending'&&refund>0)b.refundPayableJournalRecorded=true;
+ b.original_amount_paid=paid;b.refund_amount=refund;b.retention_fee_retained=retained;b.refund_date=date;b.payment_method=method;b.cancelledStatus=action==='no_refund'?'no_refund':action==='pending'?'refund_pending':action==='partial'?'partially_refunded':'refunded';b.refundStatus=action==='no_refund'?'No refund':action==='pending'?'Pending refund approval/payment':action==='partial'?'Partially refunded':'Refund marked as completed';b.cancellationAccountingCommitted=action!=='pending';b.refundRecordedAt=(action==='partial'||action==='full')?new Date().toISOString():null;
  if(typeof aud==='function')aud('Cancellation accounting committed',String(b.g||'Guest')+' · Paid '+rk(paid)+' · Refund '+rk(refund)+' · Retained '+rk(retained));
  persist();closeS();render();toast('Cancellation journal committed');
 };
