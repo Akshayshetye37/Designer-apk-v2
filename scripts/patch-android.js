@@ -19,6 +19,23 @@ if (!manifest.includes('android.permission.WRITE_EXTERNAL_STORAGE')) {
 }
 fs.writeFileSync(manifestPath, manifest);
 
+
+const { execFileSync } = require('child_process');
+const iconSvg = path.join(__dirname, '..', 'assets', 'aurelia-icon.svg');
+const resDir = path.join(appDir, 'res');
+if (fs.existsSync(iconSvg)) {
+  const densities = { 'mdpi':48, 'hdpi':72, 'xhdpi':96, 'xxhdpi':144, 'xxxhdpi':192 };
+  for (const [density, size] of Object.entries(densities)) {
+    const dir = path.join(resDir, 'mipmap-' + density);
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of ['ic_launcher', 'ic_launcher_round', 'ic_launcher_foreground']) {
+      const target = path.join(dir, name + '.png');
+      execFileSync('convert', [iconSvg, '-resize', size + 'x' + size, target]);
+    }
+  }
+  console.log('Generated Aurelia PMS launcher icons for all Android densities.');
+}
+
 const javaDir = path.join(appDir, 'java', 'com', 'aurelia', 'pms');
 fs.mkdirSync(javaDir, { recursive: true });
 const javaPath = path.join(javaDir, 'MainActivity.java');
