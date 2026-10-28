@@ -201,7 +201,7 @@ public class MainActivity extends BridgeActivity {
     Uri root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
     byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
     Uri stage = null, published = null;
-    String stageName = "." + name + ".staging-" + requestId.replaceAll("[^A-Za-z0-9_-]", "");
+    String stageName = name + ".staging-" + requestId.replaceAll("[^A-Za-z0-9_-]", "") + ".tmp";
     try {
       stage = DocumentsContract.createDocument(getContentResolver(), root, "application/json", stageName);
       if (stage == null) throw new IllegalStateException("Could not create staging backup in the selected folder.");
