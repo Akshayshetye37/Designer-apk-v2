@@ -248,7 +248,7 @@ input[type=date]{max-width:100%;min-width:0}
     },
     memoryOnly: !ok
   };
-  if(!ok) console.warn("[Aurelia] localStorage blocked (sandbox). Using in-memory store for this session.");
+  /* localStorage fallback is silent */
 })();
 </script>
 
@@ -372,7 +372,7 @@ const D=n=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+n);ret
 const IC={home:'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',stays:'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',rooms:'M3 19V6M3 14h18v5M21 14v-2a3 3 0 0 0-3-3h-7v5M7 11h.01',dining:'M7 3v7M5 3v4a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2 1-3 4-3 7s1 4 3 4'};
 const TABS=[['home','Home'],['stays','Stays'],['rooms','Rooms'],['dining','Dining']];
 const types=[['Standard',850],['Deluxe',1200],['Executive Suite',1800],['Family Chalet',2200]],rn=[['101','102','103','104'],['201','202','203','204'],['301','302'],['401','402']];
-let id=0;const S={tab:'home',f:'all',tb:3,rooms:[],b:[],t:[],today:23650,hist:[41200,38600,52400,47900,61300,56800]};
+let id=0;const S={tab:'home',f:'all',tb:3,rooms:[],b:[],t:[],g:[],exp:[],inv:[],aud:[],cancelled:[],financialLedger:[],sig:[],sales:[],menu:{},today:23650,hist:[41200,38600,52400,47900,61300,56800],set:{name:'Hari Om Retreat',tag:'Peace, comfort and mindful hospitality.',cur:'₹',upi:'',phone:'',addr:''},au:{},bk:{}};
 types.forEach((t,i)=>rn[i].forEach(n=>S.rooms.push({n,t:t[0],r:t[1],s:'ready'})));
 const B=(g,room,i,o,st,ch=[])=>S.b.push({id:++id,g,room,in:i,out:o,st,ch});
 B('Mwila Chanda','102',-2,0,'in');B('Natasha Banda','201',-1,2,'in',[['Dinner · Seared Kafue bream',260]]);B('James Whitfield','301',-3,1,'in',[['Breakfast for two',180]]);B('Sofia Marchetti','302',-1,4,'in');B('Chileshe Mulenga','401',-2,1,'in');B('Peter Zulu','103',-1,2,'in');B('Grace Tembo','202',-2,3,'in');
@@ -387,7 +387,7 @@ const openS=h=>{$('#pan').innerHTML=h;$('#sh').classList.add('show')},closeS=()=
 const row=b=>`<div class="item"><div class="av">${esc(b.g[0])}</div><div class="f"><b>${esc(b.g)}</b><small>Room ${b.room} · ${fd(b.in)} to ${fd(b.out)}</small></div>`;
 function nav(){$('#dock').style.setProperty('--i',TABS.findIndex(t=>t[0]===S.tab));$('#dock').innerHTML=TABS.map(([k,l])=>`<button class="${k===S.tab?'on':''}" onclick="go('${k}')"><svg viewBox="0 0 24 24"><path d="${IC[k]}"/></svg>${l}</button>`).join('')}
 function go(t){S.tab=t;S.sub=null;try{closeS()}catch(e){}window.scrollTo({top:0,behavior:'auto'});render()}
-function render(){try{if(!S||typeof S!=='object')throw new Error('App state is unavailable');['rooms','b','g','t','exp','inv','aud','cancelled','financialLedger'].forEach(k=>{if(!Array.isArray(S[k]))S[k]=[]});if(!V[S.tab])S.tab='home';nav();$('#v').innerHTML=`<div class="view">${V[S.tab]()}</div>`;$('[data-c]').forEach(e=>{const to=+e.dataset.c,p=e.dataset.p||'',s=e.dataset.s||'',t0=performance.now();(function f(t){const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches,duration=reduced?0:420,x=duration?Math.min(1,(t-t0)/duration):1,v=to*(1-Math.pow(2,-10*x));e.textContent=p+Math.round(x>=1?to:v).toLocaleString('en-US')+s;if(x<1)requestAnimationFrame(f)})(t0)});requestAnimationFrame(()=>$('[data-d]').forEach(e=>{try{e.setAttribute('stroke-dasharray',e.dataset.d)}catch(_){}}));if($('#cv'))motes()}catch(err){console.error('Aurelia render failed',err);const v=$('#v');if(v)v.innerHTML='<div class="card" style="margin:24px;padding:20px"><h2>Recovery needed</h2><p class="lab">The screen could not load safely. Your saved records have not been intentionally deleted. Try reopening the app. If this continues, use Backup/Restore before clearing app data.</p><button class="btn" onclick="S.tab=\'home\';location.reload()">Reload app</button><button class="btn ghost" onclick="S.tab=\'more\';S.sub=\'backup\';location.reload()">Open backup after reload</button></div>'}}
+function render(){try{if(!S||typeof S!=='object')throw new Error('App state is unavailable');['rooms','b','g','t','exp','inv','aud','cancelled','financialLedger','sig','sales'].forEach(k=>{if(!Array.isArray(S[k]))S[k]=[]});if(!S.set||typeof S.set!=='object')S.set={name:'Hari Om Retreat',tag:'Peace, comfort and mindful hospitality.',cur:'₹',upi:'',phone:'',addr:''};if(!S.au||typeof S.au!=='object')S.au={};if(!S.menu||typeof S.menu!=='object')S.menu={};if(!S.bk||typeof S.bk!=='object')S.bk={};if(!V[S.tab])S.tab='home';nav();$('#v').innerHTML=`<div class="view">${V[S.tab]()}</div>`;$$('[data-c]').forEach(e=>{const to=+e.dataset.c,p=e.dataset.p||'',s=e.dataset.s||'',t0=performance.now();(function f(t){const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches,duration=reduced?0:420,x=duration?Math.min(1,(t-t0)/duration):1,v=to*(1-Math.pow(2,-10*x));e.textContent=p+Math.round(x>=1?to:v).toLocaleString('en-US')+s;if(x<1)requestAnimationFrame(f)})(t0)});requestAnimationFrame(()=>$$('[data-d]').forEach(e=>{try{e.setAttribute('stroke-dasharray',e.dataset.d)}catch(_){}}));if($('#cv'))motes()}catch(err){console.error('Aurelia render failed',err);const v=$('#v');if(v)v.innerHTML='<div class="card" style="margin:24px;padding:20px"><h2>Recovery needed</h2><p class="lab">Render failed. Error details:</p><pre style="white-space:pre-wrap;font-size:12px;color:#df7c70;max-height:180px;overflow:auto">'+String(err&&(err.stack||err.message||err)).replace(/</g,'&lt;')+'</pre><p class="lab">Your saved records were not intentionally deleted.</p><button class="btn" onclick="S.tab=\'home\';location.reload()">Reload app</button><button class="btn ghost" onclick="S.tab=\'more\';S.sub=\'backup\';location.reload()">Open backup after reload</button></div>'}}
 const kpi=(l,v,p,s,n)=>`<div class="card"><div class="lab">${l}</div><div class="k" data-c="${v}" data-p="${p}" data-s="${s}">0</div><div class="up">${n}</div></div>`;
 function chart(v){const W=320,H=130,m=(Math.max(...v)*1.1)||1,P=v.map((y,i)=>[i*W/6,H-18-y/m*(H-36)]);let d=`M${P[0]}`;for(let i=1;i<7;i++){const a=P[i-1],b=P[i],x=(a[0]+b[0])/2;d+=`C${x},${a[1]} ${x},${b[1]} ${b}`}S.P=P;
 return `<svg class="chart" viewBox="0 0 ${W} ${H+14}" style="width:100%;touch-action:pan-y"><defs><linearGradient id="ar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9b76e" stop-opacity=".4"/><stop offset="1" stop-color="#d9b76e" stop-opacity="0"/></linearGradient></defs><path d="${d}L${W},${H}L0,${H}Z" fill="url(#ar)" style="animation:vin 1.6s .4s both"/><path d="${d}" fill="none" stroke="#e8c97f" stroke-width="2.4" pathLength="1" stroke-dasharray="1" style="animation:dr 2s cubic-bezier(.3,.7,.2,1) both"/><circle id="dot" cx="${P[6][0]}" cy="${P[6][1]}" r="5" fill="#fff2c9" stroke="#d9b76e" stroke-width="3"/>${['Mon','Tue','Wed','Thu','Fri','Sat','Today'].map((l,i)=>`<text x="${P[i][0]}" y="${H+10}" text-anchor="${i?i==6?'end':'middle':'start'}">${l}</text>`).join('')}</svg><style>@keyframes dr{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}</style>`}
@@ -436,7 +436,11 @@ document.addEventListener('pointerdown',e=>{const t=e.target.closest('button,.ch
 document.addEventListener('pointermove',e=>{const c=e.target.closest('.card');$$('.card.hot').forEach(x=>{if(x!==c){x.classList.remove('hot');x.style.setProperty('--rx','0deg');x.style.setProperty('--ry','0deg')}});if(c){const r=c.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;c.classList.add('hot');c.style.setProperty('--mx',x*100+'%');c.style.setProperty('--my',y*100+'%');c.style.setProperty('--ry',(x-.5)*6+'deg');c.style.setProperty('--rx',(.5-y)*6+'deg')}
 const ch=e.target.closest('.chart');if(ch&&S.P){const r=ch.getBoundingClientRect(),i=Math.max(0,Math.min(6,Math.round((e.clientX-r.left)/r.width*6))),v=[...S.hist,S.today][i];$('#dot').setAttribute('cx',S.P[i][0]);$('#dot').setAttribute('cy',S.P[i][1]);$('#cv2').textContent=K(v)}});
 document.addEventListener('pointerup',()=>$$('.card.hot').forEach(x=>{x.classList.remove('hot');x.style.setProperty('--rx','0deg');x.style.setProperty('--ry','0deg')}));
-render();
+try{render()}catch(bootErr){
+  console.error("Aurelia boot render failed", bootErr);
+  var v=document.getElementById("v");
+  if(v)v.innerHTML='<div class="card" style="margin:20px;padding:20px"><h2>Startup recovery</h2><p class="lab">The first screen failed to draw. Details were written to the console.</p><pre style="white-space:pre-wrap;font-size:12px;color:#df7c70">'+String(bootErr&&bootErr.stack||bootErr)+'</pre><button class="btn" onclick="location.reload()">Reload</button></div>';
+}
 /* ===== Full module set ===== */
 IC.more='M5 12h.01M12 12h.01M19 12h.01';TABS.push(['more','More']);
 const bk=i=>S.b.find(x=>x.id===i),aud=(a,d)=>S.aud.unshift({a,d,at:new Date()}),tt=b=>nts(b)*(rm(b.room)||{r:0}).r+b.ch.reduce((a,x)=>a+x[1],0)-(b.dc||0),dueB=b=>tt(b)-(b.p||0),on=k=>S.fe[k]!==false,tmf=d=>d.toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -577,10 +581,52 @@ function dopen(i){const g=S.g[i];S.dr={k:'guest',gi:i==null?null:i,g:i==null?new
 function rdD(){const d=S.dr;if(!d||!$('#d1'))return;const g=d.g;g.n=$('#d1').value;g.ph=$('#d2').value;g.em=$('#d3').value;g.idt=$('#d4').value;g.idn=$('#d5').value;if(d.k==='res'){d.in=$('#dI').value;d.out=$('#dO').value;if($('#dR'))d.room=$('#dR').value;if($('#dIT'))d.checkInTime=$('#dIT').value||defCheckInTime();if($('#dOT'))d.checkOutTime=$('#dOT').value||defCheckOutTime();if($('#dAmount'))d.bookingAmount=$('#dAmount').value}d.oc=$$('.oc2').map((r,i)=>({...d.oc[i],n:r.querySelector('.a').value,rel:r.querySelector('.b').value,idt:r.querySelector('.c').value,idn:r.querySelector('.d').value}));d.vh=$$('.vh2').map(r=>({reg:r.children[0].value,ty:r.children[1].value}))}
 const mainPh=el=>{const f=el.files&&el.files[0];if(!f)return;shrink(f,(u,key)=>{rdD();S.dr.g.img=u;if(key)S.dr.g.imgKey=key;else delete S.dr.g.imgKey;dsheet();ocrUploadedId(f,'main')})},occPh=(i,el)=>{const f=el.files&&el.files[0];if(!f)return;shrink(f,(u,key)=>{rdD();if(S.dr.oc[i]){S.dr.oc[i].img=u;if(key)S.dr.oc[i].imgKey=key;else delete S.dr.oc[i].imgKey}dsheet();ocrUploadedId(f,'occ:'+i)})};
 const dadd=k=>{rdD();S.dr[k].push(k==='oc'?{n:'',rel:'',idt:'NRC',idn:'',img:''}:{reg:'',ty:''});dsheet()},ddel=(k,i)=>{rdD();S.dr[k].splice(i,1);dsheet()},dre=()=>{rdD();dsheet()};
-function dsheet(){const d=S.dr,g=d.g,res=d.k==='res',f=(id,l,v,t='text')=>`<label class="fld"><span>${l}</span><input id="${id}" type="${t}" value="${esc(v||'')}"></label>`,ty=(v,c)=>`<select ${c?`class="${c}"`:'id="d4"'}>${IDT.map(t=>`<option ${t===v?'selected':''}>${t}</option>`).join('')}</select>`,im=(u,fn,key,label)=>`<div class="row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px;margin:6px 0">${u?`<img src="${u}" alt="ID photo thumbnail" style="height:54px;width:76px;object-fit:cover;border-radius:10px">`:'<span class="lab">ID photo needed</span>'}${pick(fn)}${key?`<button class="btn sm ghost" type="button" onclick="openOriginalPhoto('${esc(key)}','${esc(label||'Original ID photo')}')">View original</button>`:''}</div>`,a=offOf(d.in),z=offOf(d.out),fr=S.rooms.filter(r=>r.s!=='out'&&free(r.n,a,z));if(res&&!fr.some(r=>r.n===d.room))d.room=fr[0]?fr[0].n:'';
-openS(`<h2 class="foil">${res?'New reservation':g.n?esc(g.n):'New guest'}</h2>${res?`<div class="row" style="gap:8px"><label class="fld" style="flex:1"><span>Arrival</span><input id="dI" type="date" min="${ymd(0)}" value="${d.in}" onchange="dre()"></label><label class="fld" style="flex:1"><span>Departure</span><input id="dO" type="date" min="${d.in}" value="${d.out}" onchange="dre()"></label></div>
-<div class="row" style="gap:8px"><label class="fld" style="flex:1"><span>Check-in time</span><input id="dIT" type="time" value="${esc(d.checkInTime||defCheckInTime())}"></label><label class="fld" style="flex:1"><span>Check-out time</span><input id="dOT" type="time" value="${esc(d.checkOutTime||defCheckOutTime())}"></label></div>
-<label class="fld"><span>Suite free on these dates</span>${fr.length?`<select id="dR">${fr.map(r=>`<option value="${r.n}" ${r.n===d.room?'selected':''}>${r.n} · ${r.t} · ${K(r.r)}</option>`).join('')}</select>`:'<div class="lab">No suite is free for these dates.</div>'}</label>${f('dAmount','Booking amount / advance received (₹)',d.bookingAmount??'0','number')}${f('d1','Guest name',g.n)}${f('d2','Phone',g.ph,'tel')}${f('d3','Email',g.em,'email')}<label class="fld"><span>ID type</span>${ty(g.idt)}</label>${f('d5','ID number',g.idn)}${im(g.img,'mainPh(this)',g.imgKey,'Guest ID photo')}<h3 style="margin-top:14px">Occupants</h3>${d.oc.map((o,i)=>`<div class="oc2"><input class="a" placeholder="Name" value="${esc(o.n||'')}"><input class="b" placeholder="Relation" value="${esc(o.rel||'')}">${ty(o.idt,'c')}<input class="d" placeholder="ID number" value="${esc(o.idn||'')}">${im(o.img,`occPh(${i},this)`,o.imgKey,'Occupant ID photo')}<button class="btn sm ghost" onclick="ddel('oc',${i})">Remove occupant</button></div>`).join('')}<button class="btn sm ghost" style="margin-top:8px" onclick="dadd('oc')">Add occupant</button><h3 style="margin-top:14px">Vehicles</h3>${d.vh.map((v,i)=>`<div class="vh2 oc2" style="grid-template-columns:1fr 1fr auto"><input placeholder="Registration" value="${esc(v.reg||'')}"><input placeholder="Type" value="${esc(v.ty||'')}"><button class="btn sm ghost" onclick="ddel('vh',${i})">×</button></div>`).join('')}<button class="btn sm ghost" style="margin-top:8px" onclick="dadd('vh')">Add vehicle</button><div class="lab" style="margin-top:12px">Compact thumbnails are kept with guest records. Full-resolution ID photos are stored separately and included in backups; open an original only when needed. Nothing is saved to your gallery.</div><button class="btn" style="width:100%;margin-top:14px" onclick="dsave()">${res?'Confirm reservation':'Save guest'}</button>`)}
+function dsheet(){
+  const d=S.dr, g=d.g, res=d.k==='res';
+  const f=(id,l,v,t='text')=>`<label class="fld"><span>${l}</span><input id="${id}" type="${t}" value="${esc(v||'')}"></label>`;
+  const ty=(v,c)=>`<select ${c?`class="${c}"`:'id="d4"'}>${IDT.map(t=>`<option ${t===v?'selected':''}>${t}</option>`).join('')}</select>`;
+  const im=(u,fn,key,lab)=>`<div class="lab">${lab||'Photo'}</div><div class="row" style="gap:8px;align-items:center">${u?`<img src="${u}" style="width:64px;height:64px;object-fit:cover;border-radius:10px">`:''}<label class="btn sm ghost">Camera<input type="file" accept="image/*" capture="environment" hidden onchange="${fn}"></label><label class="btn sm ghost">Choose<input type="file" accept="image/*" hidden onchange="${fn}"></label></div>`;
+  const fr = res ? S.rooms.filter(r=>free(r.n, offOf(d.in), offOf(d.out)) || r.n===d.room) : [];
+  let html = `<h2 class="foil">${res?'New reservation':(g.n?esc(g.n):'New guest')}</h2>`;
+  if(res){
+    html += `<div class="row" style="gap:8px">
+      <label class="fld" style="flex:1"><span>Arrival</span><input id="dI" type="date" min="${ymd(0)}" value="${d.in}" onchange="dre()"></label>
+      <label class="fld" style="flex:1"><span>Departure</span><input id="dO" type="date" min="${d.in}" value="${d.out}" onchange="dre()"></label>
+    </div>
+    <div class="row" style="gap:8px">
+      <label class="fld" style="flex:1"><span>Check-in time</span><input id="dIT" type="time" value="${esc(d.checkInTime||defCheckInTime())}"></label>
+      <label class="fld" style="flex:1"><span>Check-out time</span><input id="dOT" type="time" value="${esc(d.checkOutTime||defCheckOutTime())}"></label>
+    </div>
+    <label class="fld"><span>Suite free on these dates</span>${fr.length
+      ? `<select id="dR">${fr.map(r=>`<option value="${r.n}" ${r.n===d.room?'selected':''}>${r.n} · ${r.t} · ${K(r.r)}</option>`).join('')}</select>`
+      : '<div class="lab">No suite is free for these dates.</div>'}</label>
+    ${f('dAmount','Booking amount / advance received (₹)',d.bookingAmount??'0','number')}`;
+  }
+  html += `${f('d1','Guest name',g.n)}${f('d2','Phone',g.ph,'tel')}${f('d3','Email',g.em,'email')}
+  <label class="fld"><span>ID type</span>${ty(g.idt)}</label>
+  ${f('d5','ID number',g.idn)}
+  ${im(g.img,'mainPh(this)',g.imgKey,'Guest ID photo')}
+  <h3 style="margin-top:14px">Occupants</h3>
+  ${(d.oc||[]).map((o,i)=>`<div class="oc2">
+    <input class="a" placeholder="Name" value="${esc(o.n||'')}">
+    <input class="b" placeholder="Relation" value="${esc(o.rel||'')}">
+    ${ty(o.idt,'c')}
+    <input class="d" placeholder="ID number" value="${esc(o.idn||'')}">
+    ${im(o.img,`occPh(${i},this)`,o.imgKey,'Occupant ID photo')}
+    <button class="btn sm ghost" onclick="ddel('oc',${i})">Remove occupant</button>
+  </div>`).join('')}
+  <button class="btn sm ghost" style="margin-top:8px" onclick="dadd('oc')">Add occupant</button>
+  <h3 style="margin-top:14px">Vehicles</h3>
+  ${(d.vh||[]).map((v,i)=>`<div class="vh2 oc2" style="grid-template-columns:1fr 1fr auto">
+    <input placeholder="Registration" value="${esc(v.reg||'')}">
+    <input placeholder="Type" value="${esc(v.ty||'')}">
+    <button class="btn sm ghost" onclick="ddel('vh',${i})">×</button>
+  </div>`).join('')}
+  <button class="btn sm ghost" style="margin-top:8px" onclick="dadd('vh')">Add vehicle</button>
+  <div class="lab" style="margin-top:12px">Compact thumbnails are kept with guest records. Full-resolution ID photos are stored separately and included in backups.</div>
+  <button class="btn" style="width:100%;margin-top:14px" onclick="dsave()">${res?'Confirm reservation':'Save guest'}</button>`;
+  openS(html);
+}
 function dsave(){rdD();const d=S.dr,g=d.g,nm=g.n.trim();if(!nm){toast('Enter the guest’s name');return}if(!g.idn.trim()||!g.img){toast('The primary guest needs an ID number and photo');return}const bad=d.oc.findIndex(o=>!o.n||!o.idn||!o.img);if(bad>=0){toast('Occupant '+(bad+1)+' needs a name, ID number and photo');return}
 if(d.k==='res'){const a=offOf(d.in),z=offOf(d.out);if(!(z>a)){toast('Departure must be after arrival');return}if(a<0){toast('Arrival cannot be in the past');return}if(!d.room||!free(d.room,a,z)){toast('Choose a suite that is free on those dates');return}}
 const gi=d.k==='guest'?d.gi:S.g.findIndex(x=>x.n.toLowerCase()===nm.toLowerCase()),old=gi!=null&&gi>=0?S.g[gi]:null,rec={...g,n:nm,occ:d.oc,veh:d.vh};if(old&&old.n!==nm)S.b.forEach(b=>{if(b.g===old.n)b.g=nm});if(old)S.g[gi]=rec;else S.g.push(rec);
@@ -845,8 +891,8 @@ if(A.checkout&&h>=defCheckOutHour())S.b.filter(b=>b.st==='in'&&b.out<=0&&dueB(b)
 S.inv.forEach(x=>{if(x.q<=x.ro){if(!x.fl){x.fl=1;aud('Auto: reorder suggested',x.n+' · '+x.q+' left');ch=1}}else x.fl=0});
 if(A.backup)autoBackup();if(ch){if($('#sh').classList.contains('show'))persist();else render()}}
 /* home wrapper */
-const _h=V.home;V.home=()=>{let h=_h(),s=S.set,n=s.name.trim()||'Hotel',k=0;const hh=n.split(' ').map(w=>`<span style="white-space:nowrap">${[...w].map(c=>`<span style="--k:${k++}">${esc(c)}</span>`).join('')}</span>`).join(' ');h=h.replace(/<h1 class="foil"[\s\S]*?<\/h1>/,`<h1 class="foil" ${n.length>13?'style="font-size:clamp(32px,9.5vw,60px)"':''}>${hh}</h1>`).replace('Peace, comfort and mindful hospitality.',esc(s.tag)).replace(/data-p="K"/g,`data-p="${esc(s.cur)}"`);
-const dm=S.b.some(x=>x.demo)||S.rooms.some(x=>x.demo)||S.g.some(x=>x.demo),nt=[];if(dm)nt.push(`<div class="card row"><span>Sample data is loaded. Remove it when you are ready to start.</span><button class="btn sm" onclick="demoRm()">Remove demo data</button></div>`);if(!S.bk.folder)nt.push(`<div class="card row"><span>Choose a backup folder so nothing is lost.</span><button class="btn sm ghost" onclick="S.tab='more';S.sub='backup';render()">Choose</button></div>`);
+const _h=V.home;V.home=()=>{let h=_h(),s=S.set||{},n=(s.name||'Hotel').trim()||'Hotel',k=0;const hh=n.split(' ').map(w=>`<span style="white-space:nowrap">${[...w].map(c=>`<span style="--k:${k++}">${esc(c)}</span>`).join('')}</span>`).join(' ');h=h.replace(/<h1 class="foil"[\s\S]*?<\/h1>/,`<h1 class="foil" ${n.length>13?'style="font-size:clamp(32px,9.5vw,60px)"':''}>${hh}</h1>`).replace('Peace, comfort and mindful hospitality.',esc(s.tag)).replace(/data-p="K"/g,`data-p="${esc(s.cur)}"`);
+const dm=S.b.some(x=>x.demo)||S.rooms.some(x=>x.demo)||S.g.some(x=>x.demo),nt=[];if(dm)nt.push(`<div class="card row"><span>Sample data is loaded. Remove it when you are ready to start.</span><button class="btn sm" onclick="demoRm()">Remove demo data</button></div>`);if(!(S.bk&&S.bk.folder))nt.push(`<div class="card row"><span>Choose a backup folder so nothing is lost.</span><button class="btn sm ghost" onclick="S.tab='more';S.sub='backup';render()">Choose</button></div>`);
 return h.replace('<div class="grid g4">',`<div class="grid" style="margin-bottom:0">${nt.join('')}</div><div class="grid g4">`)};
 /* ===== Aurelia PMS production hardening layer ===== */
 // Independent hotel / restaurant business ledgers.
