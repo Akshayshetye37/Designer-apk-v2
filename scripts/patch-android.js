@@ -30,7 +30,7 @@ if (fs.existsSync(iconSvg)) {
     fs.mkdirSync(dir, { recursive: true });
     for (const name of ['ic_launcher', 'ic_launcher_round', 'ic_launcher_foreground']) {
       const target = path.join(dir, name + '.png');
-      execFileSync('convert', [iconSvg, '-resize', size + 'x' + size, target]);
+      execFileSync(process.execPath, ['-e', 'const sharp=require(\"sharp\"); sharp(process.argv[1]).resize(+process.argv[3],+process.argv[3]).png().toFile(process.argv[2]).then(()=>{}).catch(e=>{console.error(e);process.exit(1)})', iconSvg, target, String(size)]);
     }
   }
   console.log('Generated Aurelia PMS launcher icons for all Android densities.');
