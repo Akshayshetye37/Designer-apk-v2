@@ -210,7 +210,15 @@ input[type=date]{max-width:100%;min-width:0}
 .avail>div{min-width:0;width:100%}
 .avail input[type=date]{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;font-size:clamp(12px,3.6vw,16px);padding-left:6px;padding-right:2px}
 .avail>.btn{display:flex;align-items:center;justify-content:center;width:100%;min-width:78px;max-width:100%;min-height:54px;padding:8px 10px;white-space:normal;line-height:1.15;overflow-wrap:anywhere}
-@media(max-width:430px){.avail{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:8px!important}.avail>.btn{grid-column:1/-1;min-width:0;width:100%;min-height:46px}.avail label{font-size:13px}.avail input[type=date]{font-size:13px}}
+@media(max-width:430px){
+ .avail{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:6px!important;padding:9px!important;left:12px!important;right:12px!important}
+ .avail>div{min-width:0!important;width:100%!important;overflow:hidden}
+ .avail label{font-size:12px!important;padding:0 2px!important;white-space:nowrap}
+ .avail input[type=date]{display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;font-size:12px!important;letter-spacing:-.25px;padding:2px 0!important;margin:0!important;box-sizing:border-box!important}
+ .avail input[type=date]::-webkit-date-and-time-value{text-align:left;padding:0}
+ .avail input[type=date]::-webkit-calendar-picker-indicator{margin:0;padding:0;width:14px;height:14px}
+ .avail>.btn{grid-column:1/-1;min-width:0;width:100%;min-height:46px;padding:8px 12px;white-space:normal;line-height:1.15}
+}
 </style></head><body>
 
 <script id="aurelia-safe-storage">
