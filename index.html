@@ -801,6 +801,29 @@ async function createBackupSnapshot(){
  if(curHash()!==dataHash)throw new Error('Application data changed before the snapshot was committed. Try again.');
  return {dataHash,payload,name:'aurelia-backup-'+ymd(0)+'-'+dataHash+'.json'};
 }
+async function pruneBrowserBackups(directoryHandle,protectedHandle,maximum=3){
+ const candidates=[];
+ for await(const [name,handle] of directoryHandle.entries()){
+  if(!/^aurelia-backup-.*\.json$/i.test(name)||handle.kind!=='file')continue;
+  try{
+   const file=await handle.getFile(),raw=JSON.parse(await file.text());
+   const data=raw&&raw.data;
+   let valid=!!(raw&&raw.v===4&&data&&Array.isArray(data.rooms)&&Array.isArray(data.b)&&data.set&&typeof data.set==='object');
+   if(valid&&raw.integrity){
+    valid=raw.integrity.algorithm==='SHA-256'&&/^[a-f0-9]{64}$/i.test(raw.integrity.digest||'');
+    if(valid){const copy={...raw};delete copy.integrity;valid=await sha256Hex(JSON.stringify(copy))===raw.integrity.digest}
+   }
+   candidates.push({name,handle,modified:file.lastModified||0,valid,protectedNew:handle.name===protectedHandle.name});
+  }catch(e){candidates.push({name,handle,modified:0,valid:false,protectedNew:handle.name===protectedHandle.name})}
+ }
+ candidates.sort((a,b)=>(Number(b.protectedNew)-Number(a.protectedNew))||(Number(b.valid)-Number(a.valid))||(b.modified-a.modified));
+ let retained=0;const failures=[];
+ for(const item of candidates){
+  if(item.valid&&retained<maximum){retained++;continue}
+  try{await directoryHandle.removeEntry(item.name)}catch(e){failures.push(item.name)}
+ }
+ if(failures.length)throw new Error('Could not remove obsolete backup file(s): '+failures.join(', '));
+}
 async function runBackup(auto){
  if(BKB)return;
  if(S.bk.verified&&S.bk.hash===curHash()){if(!auto)toast('Everything is already backed up');return}
@@ -820,7 +843,9 @@ async function runBackup(auto){
     await fw.write(snap.payload);await fw.close();
     if(await (await final.getFile()).text()!==snap.payload)throw new Error('Published backup read-back verification failed');
     try{await saveToDir.removeEntry(stagingName)}catch(_){}
-    bkDone(true);return;
+    let retentionWarning='';
+    try{await pruneBrowserBackups(saveToDir,final,3)}catch(cleanupError){console.error('Backup saved but retention cleanup failed',cleanupError);retentionWarning='WARN:Backup saved and verified, but retention cleanup could not finish. Existing backups were preserved.'}
+    bkDone(true,retentionWarning);return;
    }catch(e){try{await saveToDir.removeEntry(stagingName)}catch(_){}throw e}
   }
   BKB=null;
@@ -830,7 +855,7 @@ async function runBackup(auto){
   if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render();
  }catch(e){console.error('Backup snapshot failed',e);BKB=null;toast('Backup cancelled: '+(e&&e.message?e.message:'snapshot could not be verified'))}
 }
-function bkDone(ok,err){if(ok&&BKB){S.bk.verified=true;S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast('Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
+function bkDone(ok,err){if(ok&&BKB){S.bk.verified=true;S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast(err&&String(err).startsWith('WARN:')?String(err).slice(5):'Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
 function autoBackup(){if(S.bk.folder&&!BKB&&curHash()!==S.bk.hash)runBackup(true)}
 async function pickDir(){
  const requestId='bf'+Date.now();
