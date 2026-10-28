@@ -43,6 +43,7 @@ public class MainActivity extends BridgeActivity {
   private String folderRequestId = "";
   private String pendingFileRequestId = "";
   private byte[] pendingBytes = new byte[0];
+  private boolean pendingIsBackup = false;
   private SharedPreferences prefs;
 
   @Override public void onCreate(Bundle savedInstanceState) {
@@ -81,8 +82,9 @@ public class MainActivity extends BridgeActivity {
     } catch (Exception e) { return false; }
   }
 
-  private void saveDocument(String id, String name, String mime, byte[] bytes) {
+  private void saveDocument(String id, String name, String mime, byte[] bytes, boolean isBackup) {
     pendingFileRequestId = id == null ? "" : id;
+    pendingIsBackup = isBackup;
     pendingBytes = bytes == null ? new byte[0] : bytes;
     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
     intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -110,13 +112,19 @@ public class MainActivity extends BridgeActivity {
         } else if ("backupDeviceNow".equals(type)) {
           String name = obj.optString("name", "aurelia-backup.json");
           String payload = obj.optString("payload", "");
-          runOnUiThread(() -> backupResult(requestId, writeToSelectedFolder(name, payload),
-            prefs.getString("backup_tree_uri", "").isEmpty() ? "Choose a backup folder first." : "Could not write backup to selected folder."));
+          runOnUiThread(() -> {
+            if (prefs.getString("backup_tree_uri", "").isEmpty()) {
+              saveDocument(requestId, name, "application/json", payload.getBytes(StandardCharsets.UTF_8), true);
+            } else {
+              boolean ok = writeToSelectedFolder(name, payload);
+              backupResult(requestId, ok, ok ? "" : "Could not write backup to selected folder.");
+            }
+          });
         } else if ("saveFile".equals(type)) {
           byte[] bytes = Base64.decode(obj.optString("data", ""), Base64.DEFAULT);
           String name = obj.optString("name", "backup.json");
           String mime = obj.optString("mime", "application/octet-stream");
-          runOnUiThread(() -> saveDocument(requestId, name, mime, bytes));
+          runOnUiThread(() -> saveDocument(requestId, name, mime, bytes, false));
         }
       } catch (Exception ignored) { }
     }
@@ -141,12 +149,16 @@ public class MainActivity extends BridgeActivity {
           if (out == null) throw new IllegalStateException("Could not open selected file");
           out.write(pendingBytes);
           out.flush();
-          js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",true,'')");
+          if (pendingIsBackup) backupResult(pendingFileRequestId, true, "");
+          else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",true,'')");
         } catch (Exception e) {
-          js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",false," + q(e.getMessage()) + ")");
+          if (pendingIsBackup) backupResult(pendingFileRequestId, false, e.getMessage());
+          else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",false," + q(e.getMessage()) + ")");
         }
-      } else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",false,'Save cancelled')");
+      } else if (pendingIsBackup) backupResult(pendingFileRequestId, false, "Save cancelled");
+      else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",false,'Save cancelled')");
       pendingBytes = new byte[0];
+      pendingIsBackup = false;
     }
   }
 }
