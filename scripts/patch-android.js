@@ -424,22 +424,27 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) { folderResult(folderRequestId, false, "Could not retain access to selected folder"); }
       } else folderResult(folderRequestId, false, "No folder selected");
     } else if (requestCode == CREATE_BACKUP_FILE) {
-      if (resultCode == RESULT_OK && data != null && data.getData() != null) {
-        try {
-          Uri destination = data.getData();
-          byte[] expected = pendingBytes;
-          writeDocument(destination, expected);
-          if (pendingIsBackup && !sha256(expected).equals(sha256(readDocument(destination)))) throw new IllegalStateException("Saved backup failed SHA-256 read-back verification.");
-          if (pendingIsBackup) backupResult(pendingFileRequestId, true, "");
-          else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",true,'')");
-        } catch (Exception e) {
-          if (pendingIsBackup) backupResult(pendingFileRequestId, false, e.getMessage());
-          else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",false," + q(e.getMessage()) + ")");
-        }
-      } else if (pendingIsBackup) backupResult(pendingFileRequestId, false, "Save cancelled");
-      else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",false,'Save cancelled')");
+      final String completedId = pendingFileRequestId;
+      final boolean isBackup = pendingIsBackup;
+      final byte[] expected = pendingBytes;
       pendingBytes = new byte[0];
       pendingIsBackup = false;
+      if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+        final Uri destination = data.getData();
+        backupExecutor.execute(() -> {
+          try {
+            writeDocument(destination, expected);
+            if (isBackup && !sha256(expected).equals(sha256(readDocument(destination)))) throw new IllegalStateException("Saved backup failed SHA-256 read-back verification.");
+            if (isBackup) backupResult(completedId, true, "");
+            else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(completedId) + ",true,'')");
+          } catch (Exception e) {
+            String message = e.getMessage() == null ? "Could not save or verify the selected file." : e.getMessage();
+            if (isBackup) backupResult(completedId, false, message);
+            else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(completedId) + ",false," + q(message) + ")");
+          }
+        });
+      } else if (isBackup) backupResult(completedId, false, "Save cancelled");
+      else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(completedId) + ",false,'Save cancelled')");
     }
   }
 }
