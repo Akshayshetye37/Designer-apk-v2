@@ -1010,34 +1010,87 @@ render();auto();
 
 /* OCR each ID photo upload with Google ML Kit on-device. */
 window.__aureliaOcrTargets=window.__aureliaOcrTargets||{};
+function detectIndianIdType(raw){
+ const t=String(raw||'').toUpperCase();
+ if(/UNIQUE IDENTIFICATION AUTHORITY|UIDAI|AADHAAR|आधार|VID\s*[:#]/i.test(t))return 'Aadhaar (UIDAI)';
+ if(/INCOME TAX DEPARTMENT|PERMANENT ACCOUNT NUMBER|\bPAN\b/i.test(t))return 'PAN card';
+ if(/ELECTION COMMISSION OF INDIA|ELECTOR PHOTO IDENTITY|EPIC|VOTER/i.test(t))return 'Voter ID (EPIC)';
+ if(/DRIVING LICEN[CS]E|TRANSPORT DEPARTMENT|\bDL\s*(?:NO|NUMBER)/i.test(t))return 'Driving licence';
+ if(/REPUBLIC OF INDIA|PASSPORT|P<[A-Z]{3}/i.test(t))return 'Passport';
+ if(/RATION CARD|FOOD AND CIVIL SUPPLIES/i.test(t))return 'Ration card (supporting ID only)';
+ if(/NATIONAL IDENTITY|NATIONAL ID|NRC/i.test(t))return 'NRC / National ID (other country)';
+ return 'Not confidently identified';
+}
+function aadhaarVerhoeffValid(value){
+ const d=[[0,1,2,3,4,5,6,7,8,9],[1,2,3,4,0,6,7,8,9,5],[2,3,4,0,1,7,8,9,5,6],[3,4,0,1,2,8,9,5,6,7],[4,0,1,2,3,9,5,6,7,8],[5,9,8,7,6,0,4,3,2,1],[6,5,9,8,7,1,0,4,3,2],[7,6,5,9,8,2,1,0,4,3],[8,7,6,5,9,3,2,1,0,4],[9,8,7,6,5,4,3,2,1,0]];
+ const p=[[0,1,2,3,4,5,6,7,8,9],[1,5,7,6,2,8,3,0,9,4],[5,8,0,3,7,9,6,1,4,2],[8,9,1,6,0,4,3,5,2,7],[9,4,5,3,1,2,6,8,7,0],[4,2,8,6,5,7,3,9,0,1],[2,7,9,3,8,0,6,4,1,5],[7,0,4,6,9,1,3,2,5,8]];
+ if(!/^\d{12}$/.test(value))return false;
+ let c=0;const a=value.split('').reverse().map(Number);
+ for(let i=0;i<a.length;i++)c=d[c][p[i%8][a[i]]];
+ return c===0;
+}
+function passportMrzCheckDigitValid(line,fieldStart,fieldLength,checkPos){
+ const field=line.slice(fieldStart,fieldStart+fieldLength),digit=line[checkPos];
+ if(!/^\d$/.test(digit)||field.length!==fieldLength)return false;
+ const values=Array.from(field,ch=>ch==='<'?0:/\d/.test(ch)?Number(ch):/[A-Z]/.test(ch)?ch.charCodeAt(0)-55:-1);
+ if(values.some(v=>v<0))return false;
+ const weights=[7,3,1],sum=values.reduce((a,v,i)=>a+v*weights[i%3],0);
+ return sum%10===Number(digit);
+}
 function parseIdOcrText(raw){
  const text=String(raw||'').replace(/\r/g,'');
  const lines=text.split('\n').map(v=>v.replace(/[|]/g,'I').replace(/\s+/g,' ').trim()).filter(Boolean);
- const excluded=/GOVERNMENT|REPUBLIC|AUTHORITY|IDENTITY|NATIONAL|PASSPORT|DRIVING|LICEN[CS]E|DATE OF BIRTH|DOB|MALE|FEMALE|ADDRESS|INDIA|INDIAN|SIGNATURE|NRC CARD|REGISTRATION CARD/i;
- const nameParts=[];
+ const joined=lines.join('\n'),type=detectIndianIdType(joined);
+ const excluded=/GOVERNMENT|REPUBLIC|AUTHORITY|IDENTITY|NATIONAL|PASSPORT|DRIVING|LICEN[CS]E|DATE OF BIRTH|\bDOB\b|MALE|FEMALE|ADDRESS|INDIA|INDIAN|SIGNATURE|NRC CARD|REGISTRATION CARD|ELECTION COMMISSION|INCOME TAX|UNIQUE IDENTIFICATION/i;
+ const names=[];
  for(const line of lines){
   if(excluded.test(line))continue;
   const m=line.match(/^(?:full\s*name|name\s*of\s*holder|name|surname|family\s*name|given\s*names?|forenames?)\s*[:#.-]?\s*(.+)$/i);
-  if(m){const v=m[1].replace(/[^\p{L} .'’-]/gu,' ').replace(/\s+/g,' ').trim();if(v.length>=3&&!/\d/.test(v))nameParts.push(v)}
+  if(m){const v=m[1].replace(/[^\p{L} .'’-]/gu,' ').replace(/\s+/g,' ').trim();if(v.length>=3&&!/\d/.test(v))names.push(v)}
  }
- let name=nameParts.find(v=>!/^(surname|given names?|forenames?)$/i.test(v))||'';
+ let name=names.find(v=>!/^(surname|given names?|forenames?)$/i.test(v))||'';
  if(!name){
   const candidate=lines.find(v=>v.length>=5&&v.length<=60&&!excluded.test(v)&&!/[\d@]/.test(v)&&/^[\p{L}][\p{L} .'’-]+$/u.test(v)&&v.split(/\s+/).length>=2);
   if(candidate)name=candidate.trim();
  }
- const idPatterns=[
-  /(?:NRC|ID|IDENTITY|DOCUMENT|PASSPORT|CARD)\s*(?:NO|NUMBER|#)?\s*[:#.-]?\s*([A-Z0-9][A-Z0-9/-]{4,})/i,
-  /\b([A-Z]{1,3}[-/]?\d[A-Z0-9/-]{4,})\b/i,
-  /\b(\d{6,14})\b/
- ];
- let id='';
- for(const line of lines){if(/DATE OF BIRTH|\bDOB\b|PHONE|MOBILE|TEL|POSTAL|PIN CODE|ADDRESS/i.test(line))continue;for(const p of idPatterns){const m=line.match(p);if(m&&m[1]&&!excluded.test(m[1])){id=m[1].replace(/\s+/g,'').trim();break}}if(id)break}
- if(!id){
-  const candidates=[];
-  for(const line of lines){if(excluded.test(line)||/DATE OF BIRTH|\bDOB\b|PHONE|MOBILE|TEL|POSTAL|PIN CODE|ADDRESS/i.test(line))continue;for(const m of line.matchAll(/\b[A-Z0-9][A-Z0-9/-]{5,}\b/ig)){const v=m[0];if(/\d/.test(v)&&!/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(v))candidates.push(v)}}
-  candidates.sort((a,b)=>b.length-a.length);id=candidates[0]||'';
+ let id='',checksumVerified=false;
+ const compact=lines.join(' ').toUpperCase();
+ if(type==='Aadhaar (UIDAI)'){
+  const numericCandidates=compact.match(/(?:\d[\s-]*){12}/g)||[];
+  for(const candidate of numericCandidates){
+   let v=candidate.replace(/\D/g,'');
+   if(v.length===12&&aadhaarVerhoeffValid(v)){id=v;checksumVerified=true;break}
+  }
+  // Do not silently convert letters to digits for Aadhaar: only propose a candidate when checksum validates.
+ }else if(type==='PAN card'){
+  const candidates=compact.match(/[A-Z0-9]{10}/g)||[];
+  id=candidates.find(v=>/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v))||'';
+  checksumVerified=!!id;
+ }else if(type==='Voter ID (EPIC)'){
+  const candidates=compact.match(/[A-Z0-9]{10}/g)||[];
+  id=candidates.find(v=>/^[A-Z]{3}[0-9]{7}$/.test(v))||'';
+  checksumVerified=!!id;
+ }else if(type==='Driving licence'){
+  const candidates=compact.match(/[A-Z]{2}\s*[-/]?\s*\d{2}\s*[-/]?\s*\d{11,13}/g)||[];
+  id=candidates.map(v=>v.replace(/\s+/g,'').replace(/[/-]/g,'')).find(v=>/^[A-Z]{2}\d{13,15}$/.test(v))||'';
+  checksumVerified=!!id;
+ }else if(type==='Passport'){
+  const mrz=lines.map(v=>v.replace(/\s/g,'').toUpperCase()).find(v=>/^P<[A-Z]{3}/.test(v));
+  if(mrz){
+   const line2=lines.map(v=>v.replace(/\s/g,'').toUpperCase()).find(v=>/^[A-Z0-9<]{35,44}$/.test(v)&&/[0-9]{6}[MF<][0-9]{6}/.test(v));
+   if(line2){
+    const candidate=line2.slice(0,9);
+    if(/^[A-Z]\d{7}<?$/.test(candidate))id=candidate.replace(/</g,'');
+    // MRZ check digit positions are validated only when the full TD3 line is present.
+    if(line2.length>=44){checksumVerified=passportMrzCheckDigitValid(line2,0,9,9)&&passportMrzCheckDigitValid(line2,13,6,19)&&passportMrzCheckDigitValid(line2,21,6,27)}
+   }
+  }
+  if(!id){const candidates=compact.match(/\b[A-Z]\d{7}\b/g)||[];id=candidates[0]||''}
+ }else{
+  const candidates=compact.match(/\b[A-Z0-9][A-Z0-9/-]{5,}\b/g)||[];
+  id=candidates.find(v=>/\d/.test(v)&&!/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(v))||'';
  }
- return {name,id,text:lines.join('\n')};
+ return {name,id,text:lines.join('\n'),type,checksumVerified,confidence:id?(checksumVerified?'high':'medium'):'low'};
 }
 async function ocrUploadedId(file,target){
  if(!file||!S.dr)return;
@@ -1915,7 +1968,7 @@ runIdOcr=async function(){
  setTimeout(()=>{
   const out=$('#ocr-result');if(!out)return;
   const raw=out.innerText||'';
-  const type=/passport|passport no|passport number/i.test(raw)?(/visa|e-?visa/i.test(raw)?'Foreign passport + visa':'Passport'):/permanent account number|income tax department|\bpan\b/i.test(raw)?'PAN card':/unique identification authority|uidai|aadhaar|आधार|vid\s*[:#]/i.test(raw)?'Aadhaar (UIDAI)':/election commission|elector photo identity|\bepic\b|voter/i.test(raw)?'Voter ID (EPIC)':/driving licence|driving license|transport department|licence no|license no/i.test(raw)?'Driving licence':/ration card|राष्ट्रीय खाद्य सुरक्षा|food and civil supplies/i.test(raw)?'Ration card (supporting ID only)':/government employee|identity card/i.test(raw)?'Other government-issued photo ID':/national identity|national id|nrc/i.test(raw)?'NRC / National ID (other country)':'Not confidently identified';
+  const type=detectIndianIdType(raw);
   if(!out.innerHTML.includes('Proposed ID type')){const row=document.createElement('div');row.className='ln';row.innerHTML='<span>Proposed ID type</span><b>'+esc(type)+'</b>';out.insertBefore(row,out.firstChild)}
  },250);
 };
