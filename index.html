@@ -644,15 +644,28 @@ function runBackup(auto){
 function bkDone(ok,err){if(ok&&BKB){S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast('Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
 function autoBackup(){if(S.bk.folder&&!BKB&&curHash()!==S.bk.hash)runBackup(true)}
 async function pickDir(){
- if(nat({type:'chooseDeviceBackupFolder',requestId:'bf'+Date.now()}))return;
- if(window.showDirectoryPicker){
-  try{window.BKDIR=await window.showDirectoryPicker({mode:'readwrite'});S.bk.folder=true;S.bk.label=window.BKDIR.name;persist();render();toast('Backup folder chosen');autoBackup();return}
-  catch(e){if(e&&e.name==='AbortError')return}
+ const requestId='bf'+Date.now();
+ // Native Android must provide the Storage Access Framework folder picker and callback.
+ if(nat({type:'chooseDeviceBackupFolder',requestId}))return;
+
+ // showDirectoryPicker works only in supported secure browser contexts, not most WebViews.
+ if(typeof window.showDirectoryPicker==='function'){
+  try{
+   const handle=await window.showDirectoryPicker({mode:'readwrite'});
+   window.BKDIR=handle;
+   S.bk.folder=true;S.bk.label=handle.name||'Selected folder';
+   persist();render();toast('Backup folder selected');autoBackup();return;
+  }catch(e){
+   if(e&&e.name==='AbortError')return;
+   console.warn('Directory selection failed:',e);
+  }
  }
- S.bk.folder=false;S.bk.label='Download backup · choose Downloads or Google Drive when saving';persist();
- toast('This browser cannot grant folder access. Creating a backup file now; save it to Downloads or Google Drive.');
- S.bk.hash='';runBackup(false);
- setTimeout(()=>{if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()},500);
+
+ // A plain HTML download is not a folder selection; don't label it as one.
+ S.bk.folder=false;
+ S.bk.label='Folder picker unavailable · use Save backup file';
+ persist();render();
+ toast('This app cannot select a folder in this view. Use Save backup file, or update the Android folder-picker bridge.');
 }
 window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{S.bk.folder=!!ok;S.bk.label=msg||'';render();toast(ok?'Backup folder ready':'No folder chosen');if(ok)autoBackup()};
 window.aureliaNativeDeviceBackupResult=(id,ok,err)=>bkDone(ok,err);window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{S.bk.folder=!!sel;persist()};
