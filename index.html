@@ -594,8 +594,12 @@ async function photoArchive(){
 }
 async function photoRestore(archive){if(!archive||typeof archive!=='object'||Array.isArray(archive))throw new Error('Backup photo archive is invalid');const entries=Object.entries(archive);for(const [k,v] of entries){if(!k||typeof v!=='string'||!/^data:image\//i.test(v))throw new Error('Photo archive contains an invalid original image')}
  if(window.AureliaNative){await photoNative('photoRestore',{archive});return entries.length}
- try{const db=await photoDb();try{await new Promise((resolve,reject)=>{const tx=db.transaction('originals','readwrite'),st=tx.objectStore('originals');entries.forEach(([k,v])=>st.put(v,k));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Could not restore original photos'));tx.onabort=()=>reject(tx.error||new Error('Photo restore was cancelled'))})}finally{db.close()}}
- catch(e){for(const [k,v] of entries){try{localStorage.setItem(PHOTO_FALLBACK_PREFIX+k,v)}catch(_){PHOTO_MEMORY_FALLBACK.set(k,v)}}}
+ try{const db=await photoDb();try{await new Promise((resolve,reject)=>{const tx=db.transaction('originals','readwrite'),st=tx.objectStore('originals');st.clear();entries.forEach(([k,v])=>st.put(v,k));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Could not restore original photos'));tx.onabort=()=>reject(tx.error||new Error('Photo restore was cancelled'))})}finally{db.close()}}
+ catch(e){console.warn('IndexedDB photo restore unavailable; using fallback storage',e)}
+ const keep=new Set(entries.map(([k])=>PHOTO_FALLBACK_PREFIX+k));
+ try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith(PHOTO_FALLBACK_PREFIX)&&!keep.has(k))localStorage.removeItem(k)}}catch(e){}
+ for(const [k,v] of entries){try{localStorage.setItem(PHOTO_FALLBACK_PREFIX+k,v)}catch(_){PHOTO_MEMORY_FALLBACK.set(k,v)}}
+ for(const k of Array.from(PHOTO_MEMORY_FALLBACK.keys()))if(!Object.prototype.hasOwnProperty.call(archive,k))PHOTO_MEMORY_FALLBACK.delete(k);
  return entries.length}
 
 function openOriginalPhoto(key,label){photoGet(key).then(data=>{if(!data){toast('Original photo is not on this device. Restore a backup containing the photo archive.');return}openS('<h2 class="foil">'+esc(label||'Original ID photo')+'</h2><img src="'+data+'" alt="Original ID photo" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><p class="lab">Full-resolution original loaded on demand from the private photo archive.</p><button class="btn ghost" onclick="closeS()">Close</button>')}).catch(()=>toast('Could not load the original photo'))}
@@ -974,7 +978,7 @@ async function restoreGo(){
  let oldPhotos;
  try{oldPhotos=await photoArchive()}catch(e){toast('Restore cancelled: could not create a rollback copy of current photos.');return}
  try{
-  if(Object.keys(archive).length)await photoRestore(archive);
+  await photoRestore(archive);
   const verifiedPhotos=await photoArchive();
   validatePhotoArchive(restored,verifiedPhotos);
   DK.forEach(k=>{if(restored[k]!==undefined)S[k]=restored[k]});
@@ -986,7 +990,7 @@ async function restoreGo(){
   S.rst=null;S.rstMode=null;location.reload();
  }catch(e){
   console.error('Transactional restore failed',e);
-  try{if(oldPhotos&&Object.keys(oldPhotos).length)await photoRestore(oldPhotos)}catch(photoRollbackError){console.error('Photo rollback failed',photoRollbackError)}
+  try{if(oldPhotos)await photoRestore(oldPhotos)}catch(photoRollbackError){console.error('Photo rollback failed',photoRollbackError)}
   DK.forEach(k=>{if(liveBefore[k]!==undefined)S[k]=liveBefore[k]});
   try{persist()}catch(rollbackError){console.error('State rollback failed',rollbackError)}
   toast('Restore failed and rollback was attempted. Do not clear app data; check the backup and device storage.');
