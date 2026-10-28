@@ -20,6 +20,12 @@ if (!manifest.includes('android.permission.CAMERA')) {
 if (!manifest.includes('android.permission.WRITE_EXTERNAL_STORAGE')) {
   manifest = manifest.replace(/<application\b/, '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <application');
 }
+if (!manifest.includes('androidx.core.content.FileProvider')) {
+  manifest = manifest.replace(/<application\\b/, '<application');
+  manifest = manifest.replace(/<\\/application>/, '    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/aurelia_file_paths" /></provider>\\n</application>');
+}
+fs.mkdirSync(path.join(resDir, 'xml'), { recursive: true });
+fs.writeFileSync(path.join(resDir, 'xml', 'aurelia_file_paths.xml'), '<?xml version="1.0" encoding="utf-8"?><paths xmlns:android="http://schemas.android.com/apk/res/android"><cache-path name="shared" path="shared/" /></paths>');
 fs.writeFileSync(manifestPath, manifest);
 
 
@@ -171,6 +177,41 @@ public class MainActivity extends BridgeActivity {
     }
   }
 
+  private void printHtmlDocument(String html, String title) {
+    try {
+      android.webkit.WebView printView = new android.webkit.WebView(MainActivity.this);
+      printView.setWebViewClient(new android.webkit.WebViewClient() {
+        @Override public void onPageFinished(android.webkit.WebView view, String url) {
+          try {
+            android.print.PrintManager manager = (android.print.PrintManager) getSystemService(PRINT_SERVICE);
+            android.print.PrintDocumentAdapter adapter = view.createPrintDocumentAdapter(title);
+            manager.print(title, adapter, new android.print.PrintAttributes.Builder().setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4).setResolution(new android.print.PrintAttributes.Resolution("aurelia", "Aurelia", 300, 300)).setMinMargins(android.print.PrintAttributes.Margins.NO_MARGINS).build());
+          } catch (Exception ignored) { }
+        }
+      });
+      printView.loadDataWithBaseURL(null, "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:Arial,sans-serif;color:#222;margin:18px}img{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}td,th{padding:7px;border-bottom:1px solid #ddd;text-align:left} .noprint,button{display:none!important}</style></head><body>" + html + "</body></html>", "text/html", "UTF-8", null);
+    } catch (Exception ignored) { }
+  }
+
+  private void shareImageFile(String name, String mime, byte[] bytes, String phone) {
+    try {
+      java.io.File dir = new java.io.File(getCacheDir(), "shared");
+      if (!dir.exists()) dir.mkdirs();
+      String safeName = name == null ? "invoice.png" : name.replaceAll("[^A-Za-z0-9._-]", "_");
+      java.io.File file = new java.io.File(dir, safeName);
+      try (java.io.FileOutputStream out = new java.io.FileOutputStream(file)) { out.write(bytes); out.flush(); }
+      Uri uri = androidx.core.content.FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".fileprovider", file);
+      Intent send = new Intent(Intent.ACTION_SEND);
+      send.setType(mime == null ? "image/png" : mime);
+      send.putExtra(Intent.EXTRA_STREAM, uri);
+      send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+      if (phone != null && !phone.isEmpty()) send.putExtra("jid", phone.replaceAll("\\D", "") + "@s.whatsapp.net");
+      startActivity(Intent.createChooser(send, "Share invoice"));
+    } catch (Exception e) {
+      try { saveDocument("share-fallback", name, mime, bytes, false); } catch (Exception ignored) { }
+    }
+  }
+
   private class AureliaBridge {
     @JavascriptInterface public void postMessage(String raw) {
       try {
@@ -258,6 +299,21 @@ public class MainActivity extends BridgeActivity {
               backupResult(requestId, ok, ok ? "" : "Could not write backup to selected folder.");
             }
           });
+        } else if ("openUrl".equals(type)) {
+          String url = obj.optString("url", "");
+          runOnUiThread(() -> { try { Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url)); startActivity(intent); } catch (Exception e) { js("window.aureliaNativeActionResult && window.aureliaNativeActionResult(" + q(requestId) + ",false," + q("Could not open link") + ")"); } });
+        } else if ("shareText".equals(type)) {
+          String title = obj.optString("title", "Share");
+          String text = obj.optString("text", "");
+          runOnUiThread(() -> { try { Intent intent = new Intent(Intent.ACTION_SEND); intent.setType("text/plain"); intent.putExtra(Intent.EXTRA_TEXT, text); startActivity(Intent.createChooser(intent, title)); } catch (Exception e) { js("window.aureliaNativeActionResult && window.aureliaNativeActionResult(" + q(requestId) + ",false," + q("Sharing is unavailable") + ")"); } });
+        } else if ("printInvoice".equals(type)) {
+          String html = obj.optString("html", "");
+          runOnUiThread(() -> printHtmlDocument(html, obj.optString("title", "Aurelia PMS invoice")));
+        } else if ("shareInvoicePng".equals(type) || "shareImage".equals(type)) {
+          String name = obj.optString("name", "invoice.png");
+          String mime = obj.optString("mime", "image/png");
+          byte[] bytes = Base64.decode(obj.optString("data", ""), Base64.DEFAULT);
+          runOnUiThread(() -> shareImageFile(name, mime, bytes, obj.optString("phone", "")));
         } else if ("saveFile".equals(type)) {
           byte[] bytes = Base64.decode(obj.optString("data", ""), Base64.DEFAULT);
           String name = obj.optString("name", "backup.json");
