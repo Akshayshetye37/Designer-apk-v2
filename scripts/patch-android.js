@@ -42,8 +42,9 @@ if (fs.existsSync(iconSvg)) {
 const javaDir = path.join(appDir, 'java', 'com', 'aurelia', 'pms');
 fs.mkdirSync(javaDir, { recursive: true });
 
-const appGradleGroovy = path.join(appDir, 'build.gradle');
-const appGradleKts = path.join(appDir, 'build.gradle.kts');
+const appModuleDir = path.join(androidDir, 'app');
+const appGradleGroovy = path.join(appModuleDir, 'build.gradle');
+const appGradleKts = path.join(appModuleDir, 'build.gradle.kts');
 if (fs.existsSync(appGradleGroovy)) {
   let gradle = fs.readFileSync(appGradleGroovy, 'utf8');
   if (!gradle.includes('com.google.mlkit:text-recognition:')) {
