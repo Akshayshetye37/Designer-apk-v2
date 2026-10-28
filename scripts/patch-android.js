@@ -47,13 +47,13 @@ const appGradleKts = path.join(appDir, 'build.gradle.kts');
 if (fs.existsSync(appGradleGroovy)) {
   let gradle = fs.readFileSync(appGradleGroovy, 'utf8');
   if (!gradle.includes('com.google.mlkit:text-recognition:')) {
-    gradle = gradle.replace(/dependencies\\s*\\{/, match => match + "\\n    implementation 'com.google.mlkit:text-recognition:16.0.1'");
+    gradle = gradle.replace(/dependencies\s*\{//, match => match + "\n    implementation 'com.google.mlkit:text-recognition:16.0.1'");
     fs.writeFileSync(appGradleGroovy, gradle);
   }
 } else if (fs.existsSync(appGradleKts)) {
   let gradle = fs.readFileSync(appGradleKts, 'utf8');
   if (!gradle.includes('com.google.mlkit:text-recognition:')) {
-    gradle = gradle.replace(/dependencies\\s*\\{/, match => match + '\\n    implementation("com.google.mlkit:text-recognition:16.0.1")');
+    gradle = gradle.replace(/dependencies\s*\{//, match => match + '\n    implementation("com.google.mlkit:text-recognition:16.0.1")');
     fs.writeFileSync(appGradleKts, gradle);
   }
 }
