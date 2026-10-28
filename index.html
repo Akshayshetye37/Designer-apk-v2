@@ -871,10 +871,7 @@ window.aureliaNativeDeviceBackupResult=(id,ok,err)=>{if(!BKB||String(id)!==Strin
 window.aureliaNativeDeviceBackupStatusResult=(id,sel,backupExists)=>{
  if(pendingBackupFolderRequestId&&String(id)!==String(pendingBackupFolderRequestId))return;
  S.bk.folder=!!sel;
- if(sel&&LOCAL_STATE_STATUS==='valid'){
-  if(backupExists){S.bk.hash=curHash();S.bk.verified=true}
-  else S.bk.verified=false;
- }
+ if(sel&&LOCAL_STATE_STATUS==='valid'&&!(backupExists&&S.bk.verified&&S.bk.hash===curHash()))S.bk.verified=false;
  if(RECOVERY_CHECK_PENDING&&sel){
   const requestId='ar'+Date.now();AUTO_RECOVERY_REQUEST_ID=requestId;
   if(nat({type:'recoverLatestBackup',requestId}))return;
