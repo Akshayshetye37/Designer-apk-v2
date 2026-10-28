@@ -571,7 +571,7 @@ SUB.folio=()=>{const bs=S.b.filter(b=>b.st==='in'||b.st==='done'),ch=bs.flatMap(
 return hd('Folio')+`<div class="card"><h2>Where the money goes</h2><div class="lab">Charges on the left. Discounts, payments received and balances due on the right.</div>${flow([[room,'#d9b76e','Rooms'],[din,'#3cb98a','Dining'],[ext,'#8aa8ff','Extras']],[[pd,'#3cb98a','Received'],[du,'#d0675a','Due'],[dc,'#e3a944','Discounts']])}</div><div class="card" style="margin-top:14px"><h2>Received by method</h2>${Object.entries(M2).map(([k,v])=>`<div class="row lab" style="margin-top:8px"><span>${k}</span><span>${K(v)}</span></div><div class="bar"><i style="width:${v/mx*100}%"></i></div>`).join('')||'<div class="empty">No payments yet.</div>'}</div><h2 style="margin:20px 0 8px">Guest ledgers</h2><div class="grid" style="margin-top:0">${bs.map(b=>`<div class="card"><div class="row"><div><h3>${esc(b.g)}</h3><div class="lab">Room ${b.room} · ${b.st==='in'?'In house':'Departed'}</div></div><span class="tag ${dueB(b)>0?'out':'ready'}">${dueB(b)>0?'Due '+K(dueB(b)):'Settled'}</span></div><div class="bar"><i style="width:${Math.min(100,paid(b)/Math.max(1,tt(b))*100)}%"></i></div><div style="margin-top:10px">${stmt(b)}</div><div class="row" style="margin-top:12px"><button class="btn sm ghost" onclick="inv(${b.id})">Invoice</button><button class="btn sm" onclick="folio(${b.id})">Open folio</button></div></div>`).join('')||'<div class="empty">Checked-in guests appear here.</div>'}</div><div class="card" style="margin-top:14px"><h2>UPI notifications</h2><div class="lab">Read only. Aurelia reads payment alerts from the UPI apps on this phone. It never sends, approves or changes a payment.</div><div class="list" style="margin-top:8px">${S.sig.map(s=>`<div class="item"><div class="f"><b>${K(s.amt)} · ${esc(s.app)}</b><small>${esc(s.payer||'Unknown payer')} · ${tmf(new Date(s.at))}</small></div><span class="tag ${s.st==='matched'?'ready':'clean'}">${s.st==='matched'?'Matched':'Open'}</span>${s.st!=='matched'?`<button class="btn sm ghost" onclick="sigM('${s.id}')">Match</button>`:''}</div>`).join('')||'<div class="empty">No notifications read yet.</div>'}</div><div class="row" style="margin-top:12px"><button class="btn sm" onclick="nat({type:'openNotificationAccess'})||toast('Notification access is set in the Android app')">Allow access</button><button class="btn sm ghost" onclick="testSig()">Send test</button></div></div>`};
 /* reservation and guest draft */
 const pick=c=>`<label class="btn sm ghost">Camera<input type="file" accept="image/*" capture="environment" hidden onchange="${c}"></label><label class="btn sm ghost">Choose<input type="file" accept="image/*" hidden onchange="${c}"></label>`;
-const newDraft=(k,room,day)=>{const a=day==null?1:Math.max(0,day);return{k,g:{n:'',ph:'',em:'',idt:'NRC',idn:'',img:''},oc:[],vh:[],room:room||'',in:ymd(a),out:ymd(a+2),checkInTime:defCheckInTime(),checkOutTime:defCheckOutTime()}};
+const newDraft=(k,room,day)=>{const a=day==null?1:Math.max(0,day);return{k,g:{n:'',ph:'',em:'',idt:'NRC',idn:'',img:''},oc:[],vh:[],room:room||'',in:ymd(a),out:ymd(a+1),checkInTime:defCheckInTime(),checkOutTime:defCheckOutTime()}};
 function resv(room,day){if(!S.rooms.length){toast('Add a room first');return}S.dr=newDraft('res',room,day);dsheet()}
 function dopen(i){const g=S.g[i];S.dr={k:'guest',gi:i==null?null:i,g:i==null?newDraft('g').g:{n:g.n,ph:g.ph,em:g.em,idt:g.idt,idn:g.idn,img:g.img},oc:i==null?[]:JSON.parse(JSON.stringify(g.occ||[])),vh:i==null?[]:JSON.parse(JSON.stringify(g.veh||[]))};dsheet()}
 function rdD(){const d=S.dr;if(!d||!$('#d1'))return;const g=d.g;g.n=$('#d1').value;g.ph=$('#d2').value;g.em=$('#d3').value;g.idt=$('#d4').value;g.idn=$('#d5').value;if(d.k==='res'){d.in=$('#dI').value;d.out=$('#dO').value;if($('#dR'))d.room=$('#dR').value;if($('#dIT'))d.checkInTime=$('#dIT').value||defCheckInTime();if($('#dOT'))d.checkOutTime=$('#dOT').value||defCheckOutTime();if($('#dAmount'))d.bookingAmount=$('#dAmount').value}d.oc=$$('.oc2').map((r,i)=>({...d.oc[i],n:r.querySelector('.a').value,rel:r.querySelector('.b').value,idt:r.querySelector('.c').value,idn:r.querySelector('.d').value}));d.vh=$$('.vh2').map(r=>({reg:r.children[0].value,ty:r.children[1].value}))}
@@ -645,8 +645,8 @@ async function runBackup(auto){
  const nm='aurelia-backup-'+ymd(0)+'-'+h+'.json';
  let originals={};try{originals=await photoArchive()}catch(e){console.warn('Photo archive skipped',e)}
  const pl=JSON.stringify({v:3,hotel:S.set.name,at:new Date().toISOString(),data:Object.fromEntries(DK.map(k=>[k,S[k]])),photoArchive:originals},null,2);
- BKB={h,nm,payload:pl};
- if(nat({type:'backupDeviceNow',requestId:'bk'+Date.now(),name:nm,payload:pl}))return;
+  const requestId='bk'+Date.now(); BKB={h,nm,payload:pl,requestId};
+  if(nat({type:'backupDeviceNow',requestId,name:nm,payload:pl}))return;
  const saveToDir=window.BKDIR;
  if(saveToDir){saveToDir.getFileHandle(nm,{create:true}).then(f=>f.createWritable()).then(w=>w.write(pl).then(()=>w.close())).then(()=>bkDone(true),e=>bkDone(false,String(e)));return}
  BKB=null;
@@ -660,8 +660,10 @@ function bkDone(ok,err){if(ok&&BKB){S.bk.hash=BKB.h;S.bk.last=new Date().toISOSt
 function autoBackup(){if(S.bk.folder&&!BKB&&curHash()!==S.bk.hash)runBackup(true)}
 async function pickDir(){
  const requestId='bf'+Date.now();
+  pendingBackupFolderRequestId=requestId;
  // Native Android must provide the Storage Access Framework folder picker and callback.
  if(nat({type:'chooseDeviceBackupFolder',requestId}))return;
+  pendingBackupFolderRequestId=null;
 
  // showDirectoryPicker works only in supported secure browser contexts, not most WebViews.
  if(typeof window.showDirectoryPicker==='function'){
@@ -682,8 +684,13 @@ async function pickDir(){
  persist();render();
  toast('This app cannot select a folder in this view. Use Save backup file, or update the Android folder-picker bridge.');
 }
-window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{S.bk.folder=!!ok;S.bk.label=msg||'';render();toast(ok?'Backup folder ready':'No folder chosen');if(ok)autoBackup()};
-window.aureliaNativeDeviceBackupResult=(id,ok,err)=>bkDone(ok,err);window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{S.bk.folder=!!sel;persist()};
+let pendingBackupFolderRequestId=null;
+window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{
+ if(!pendingBackupFolderRequestId||String(id)!==String(pendingBackupFolderRequestId))return;
+ pendingBackupFolderRequestId=null;S.bk.folder=!!ok;S.bk.label=msg||'';persist();render();toast(ok?'Backup folder ready':'No folder chosen');if(ok)autoBackup();
+};
+window.aureliaNativeDeviceBackupResult=(id,ok,err)=>{if(!BKB||String(id)!==String(BKB.requestId))return;bkDone(ok,err)};
+window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{if(pendingBackupFolderRequestId&&String(id)!==String(pendingBackupFolderRequestId))return;S.bk.folder=!!sel;persist()};
 function restoreF(el){
  const f=el.files&&el.files[0];if(!f)return;
  f.text().then(t=>{
