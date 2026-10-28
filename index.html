@@ -868,13 +868,18 @@ window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{
  persist();render();toast('Backup folder ready');autoBackup();
 };
 window.aureliaNativeDeviceBackupResult=(id,ok,err)=>{if(!BKB||String(id)!==String(BKB.requestId))return;bkDone(ok,err)};
+function requestNextAutomaticRecovery(){
+ const requestId='ar'+Date.now();AUTO_RECOVERY_REQUEST_ID=requestId;
+ if(nat({type:'recoverLatestBackup',requestId,exclude:AUTO_RECOVERY_EXCLUDED}))return true;
+ AUTO_RECOVERY_REQUEST_ID=null;return false;
+}
 window.aureliaNativeDeviceBackupStatusResult=(id,sel,backupExists)=>{
  if(pendingBackupFolderRequestId&&String(id)!==String(pendingBackupFolderRequestId))return;
  S.bk.folder=!!sel;
  if(sel&&LOCAL_STATE_STATUS==='valid'&&!(backupExists&&S.bk.verified&&S.bk.hash===curHash()))S.bk.verified=false;
  if(RECOVERY_CHECK_PENDING&&sel){
-  const requestId='ar'+Date.now();AUTO_RECOVERY_REQUEST_ID=requestId;
-  if(nat({type:'recoverLatestBackup',requestId}))return;
+  AUTO_RECOVERY_EXCLUDED=[];
+  if(requestNextAutomaticRecovery())return;
   RECOVERY_CHECK_PENDING=false;persist();toast('Automatic recovery is unavailable. Use Restore from backup file.');
   return;
  }
@@ -882,7 +887,7 @@ window.aureliaNativeDeviceBackupStatusResult=(id,sel,backupExists)=>{
  persist();
  if(sel&&LOCAL_STATE_STATUS==='valid')autoBackup();
 };
-window.aureliaNativeRecoveryBackupResult=async(id,ok,payload)=>{
+window.aureliaNativeRecoveryBackupResult=async(id,ok,payload,fileName)=>{
  if(!AUTO_RECOVERY_REQUEST_ID||String(id)!==String(AUTO_RECOVERY_REQUEST_ID))return;
  AUTO_RECOVERY_REQUEST_ID=null;
  if(!ok){
@@ -892,16 +897,20 @@ window.aureliaNativeRecoveryBackupResult=async(id,ok,payload)=>{
  }
  try{
   const raw=JSON.parse(payload);
-  if(!raw||raw.v!==4||!raw.data||!Array.isArray(raw.data.rooms)||!Array.isArray(raw.data.b)||!raw.data.set)throw new Error('The newest backup is not a valid Aurelia snapshot.');
-  if(!raw.integrity||raw.integrity.algorithm!=='SHA-256'||typeof raw.integrity.digest!=='string')throw new Error('The backup has no supported integrity checksum.');
+  if(!raw||raw.v!==4||!raw.data||!Array.isArray(raw.data.rooms)||!Array.isArray(raw.data.b)||!raw.data.set)throw new Error('Backup snapshot structure is invalid.');
+  if(!raw.integrity||raw.integrity.algorithm!=='SHA-256'||typeof raw.integrity.digest!=='string')throw new Error('Backup has no supported integrity checksum.');
   const copy={...raw};delete copy.integrity;
-  if(await sha256Hex(JSON.stringify(copy))!==raw.integrity.digest)throw new Error('The backup checksum does not match its contents.');
+  if(await sha256Hex(JSON.stringify(copy))!==raw.integrity.digest)throw new Error('Backup checksum does not match its contents.');
   validatePhotoArchive(raw.data,raw.photoArchive||{});
   S.rst={...raw.data,photoArchive:raw.photoArchive||{}};S.rstMode='snapshot';
   RECOVERY_CHECK_PENDING=false;
   await restoreGo();
  }catch(e){
   console.error('Automatic backup recovery failed',e);
+  if(fileName&&!AUTO_RECOVERY_EXCLUDED.includes(fileName)&&AUTO_RECOVERY_EXCLUDED.length<20){
+   AUTO_RECOVERY_EXCLUDED.push(fileName);
+   if(requestNextAutomaticRecovery()){toast('The newest backup failed validation. Trying an older recovery point.');return}
+  }
   RECOVERY_CHECK_PENDING=false;persist();
   toast('Automatic recovery failed: '+(e.message||'backup verification failed')+'. Use Restore from backup file.');
  }
@@ -1051,7 +1060,7 @@ async function restoreGo(){
 }
 const useMenu=m=>{Object.keys(MENU).forEach(k=>delete MENU[k]);Object.assign(MENU,m);S.menu=MENU};
 function persist(){if(RECOVERY_CHECK_PENDING)return;try{const o={tab:S.tab,bk:S.bk};DK.forEach(k=>o[k]=S[k]);(window.__aureliaStorage||localStorage).setItem(SK,JSON.stringify(o))}catch(e){if(!S.qw){S.qw=1;toast('Device storage is full. Back up, then remove old items.')}}}
-let LOCAL_STATE_STATUS='missing',RECOVERY_CHECK_PENDING=false,AUTO_RECOVERY_REQUEST_ID=null;
+let LOCAL_STATE_STATUS='missing',RECOVERY_CHECK_PENDING=false,AUTO_RECOVERY_REQUEST_ID=null,AUTO_RECOVERY_EXCLUDED=[];
 function loadAll(){
  let raw=null;try{raw=(window.__aureliaStorage||localStorage).getItem(SK)}catch(e){LOCAL_STATE_STATUS='invalid';return}
  if(!raw){LOCAL_STATE_STATUS='missing';return}
