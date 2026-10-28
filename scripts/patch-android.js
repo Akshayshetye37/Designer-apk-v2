@@ -315,7 +315,7 @@ public class MainActivity extends BridgeActivity {
         return null;
       } catch (Exception cleanupError) {
         android.util.Log.e("AureliaBackup", "Backup is verified, but retention cleanup failed", cleanupError);
-        return "WARN:Backup saved and verified, but the three-backup retention cleanup could not finish. Existing backups were preserved.";
+        return "WARN:Backup saved and verified, but retention cleanup was incomplete. Check the folder; older backup files may remain.";
       }
     } catch (Exception e) {
       if (published != null) try { DocumentsContract.deleteDocument(getContentResolver(), published); } catch (Exception ignored) { }
