@@ -251,10 +251,11 @@ public class MainActivity extends BridgeActivity {
 
   private class AureliaBridge {
     @JavascriptInterface public void postMessage(String raw) {
+      String type = "", requestId = "";
       try {
         JSONObject obj = new JSONObject(raw);
-        String type = obj.optString("type", "");
-        String requestId = obj.optString("requestId", "");
+        type = obj.optString("type", "");
+        requestId = obj.optString("requestId", "");
         if ("photoStore".equals(type)) {
           String key = obj.optString("key", "");
           String data = obj.optString("data", "");
@@ -391,7 +392,12 @@ public class MainActivity extends BridgeActivity {
           String mime = obj.optString("mime", "application/octet-stream");
           runOnUiThread(() -> saveDocument(requestId, name, mime, bytes, false));
         }
-      } catch (Exception ignored) { }
+      } catch (Exception error) {
+        String message = error.getMessage() == null ? "Native backup operation failed." : error.getMessage();
+        if ("photoStore".equals(type) || "photoLoad".equals(type) || "photoArchive".equals(type) || "photoRestore".equals(type)) photoResult(requestId, false, message);
+        else if ("backupDeviceNow".equals(type)) backupResult(requestId, false, message);
+        else if ("deviceBackupStatus".equals(type)) js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + ",false)");
+      }
     }
   }
 
