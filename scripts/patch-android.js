@@ -155,8 +155,13 @@ public class MainActivity extends BridgeActivity {
     js("window.aureliaNativePhotoResult && window.aureliaNativePhotoResult(" + q(id) + "," + ok + "," + q(payload) + ")");
   }
   private String readText(java.io.File file) throws Exception {
-    byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
-    return new String(bytes, StandardCharsets.UTF_8);
+    try (java.io.FileInputStream in = new java.io.FileInputStream(file);
+         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+      byte[] buffer = new byte[8192];
+      int count;
+      while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+      return new String(out.toByteArray(), StandardCharsets.UTF_8);
+    }
   }
   private void writeText(java.io.File file, String value) throws Exception {
     try (java.io.FileOutputStream out = new java.io.FileOutputStream(file)) {
