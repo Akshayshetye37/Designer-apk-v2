@@ -142,13 +142,66 @@ public class MainActivity extends BridgeActivity {
     startActivityForResult(intent, CREATE_BACKUP_FILE);
   }
 
+  private java.io.File photoDir() {
+    java.io.File dir = new java.io.File(getFilesDir(), "aurelia_photo_archive");
+    if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("Could not create private photo archive");
+    return dir;
+  }
+  private java.io.File photoFile(String key) {
+    if (key == null || !key.matches("[A-Za-z0-9_-]{1,120}")) throw new IllegalArgumentException("Invalid photo key");
+    return new java.io.File(photoDir(), key + ".txt");
+  }
+  private void photoResult(String id, boolean ok, String payload) {
+    js("window.aureliaNativePhotoResult && window.aureliaNativePhotoResult(" + q(id) + "," + ok + "," + q(payload) + ")");
+  }
+  private String readText(java.io.File file) throws Exception {
+    byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+    return new String(bytes, StandardCharsets.UTF_8);
+  }
+  private void writeText(java.io.File file, String value) throws Exception {
+    try (java.io.FileOutputStream out = new java.io.FileOutputStream(file)) {
+      out.write(value.getBytes(StandardCharsets.UTF_8));
+      out.flush();
+      out.getFD().sync();
+    }
+  }
+
   private class AureliaBridge {
     @JavascriptInterface public void postMessage(String raw) {
       try {
         JSONObject obj = new JSONObject(raw);
         String type = obj.optString("type", "");
         String requestId = obj.optString("requestId", "");
-        if ("requestCameraPermission".equals(type)) {
+        if ("photoStore".equals(type)) {
+          String key = obj.optString("key", "");
+          String data = obj.optString("data", "");
+          if (!data.startsWith("data:image/")) throw new IllegalArgumentException("Invalid photo data");
+          writeText(photoFile(key), data);
+          photoResult(requestId, true, "stored");
+        } else if ("photoLoad".equals(type)) {
+          String key = obj.optString("key", "");
+          java.io.File file = photoFile(key);
+          if (!file.isFile()) photoResult(requestId, false, "Original photo not found on this device");
+          else photoResult(requestId, true, readText(file));
+        } else if ("photoArchive".equals(type)) {
+          JSONObject archive = new JSONObject();
+          java.io.File[] files = photoDir().listFiles((dir, name) -> name.endsWith(".txt"));
+          if (files != null) for (java.io.File file : files) {
+            String key = file.getName().substring(0, file.getName().length() - 4);
+            archive.put(key, readText(file));
+          }
+          photoResult(requestId, true, archive.toString());
+        } else if ("photoRestore".equals(type)) {
+          JSONObject archive = obj.optJSONObject("archive");
+          if (archive == null) throw new IllegalArgumentException("Invalid photo archive");
+          java.util.Iterator<String> keys = archive.keys();
+          while (keys.hasNext()) {
+            String key = keys.next(), data = archive.optString(key, "");
+            if (!data.startsWith("data:image/")) throw new IllegalArgumentException("Invalid archived image");
+            writeText(photoFile(key), data);
+          }
+          photoResult(requestId, true, "restored");
+        } else if ("requestCameraPermission".equals(type)) {
           runOnUiThread(() -> {
             cameraPermissionRequestId = requestId;
             if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
