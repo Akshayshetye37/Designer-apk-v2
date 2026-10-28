@@ -852,7 +852,43 @@ window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{
  persist();render();toast('Backup folder ready');autoBackup();
 };
 window.aureliaNativeDeviceBackupResult=(id,ok,err)=>{if(!BKB||String(id)!==String(BKB.requestId))return;bkDone(ok,err)};
-window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{if(pendingBackupFolderRequestId&&String(id)!==String(pendingBackupFolderRequestId))return;S.bk.folder=!!sel;persist()};
+window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{
+ if(pendingBackupFolderRequestId&&String(id)!==String(pendingBackupFolderRequestId))return;
+ S.bk.folder=!!sel;
+ if(RECOVERY_CHECK_PENDING&&sel){
+  const requestId='ar'+Date.now();AUTO_RECOVERY_REQUEST_ID=requestId;
+  if(nat({type:'recoverLatestBackup',requestId}))return;
+  RECOVERY_CHECK_PENDING=false;persist();toast('Automatic recovery is unavailable. Use Restore from backup file.');
+  return;
+ }
+ if(RECOVERY_CHECK_PENDING&&!sel)RECOVERY_CHECK_PENDING=false;
+ persist();
+ if(sel&&LOCAL_STATE_STATUS==='valid')autoBackup();
+};
+window.aureliaNativeRecoveryBackupResult=async(id,ok,payload)=>{
+ if(!AUTO_RECOVERY_REQUEST_ID||String(id)!==String(AUTO_RECOVERY_REQUEST_ID))return;
+ AUTO_RECOVERY_REQUEST_ID=null;
+ if(!ok){
+  RECOVERY_CHECK_PENDING=false;persist();
+  toast('Automatic recovery could not find a readable backup. Use Restore from backup file.');
+  return;
+ }
+ try{
+  const raw=JSON.parse(payload);
+  if(!raw||raw.v!==4||!raw.data||!Array.isArray(raw.data.rooms)||!Array.isArray(raw.data.b)||!raw.data.set)throw new Error('The newest backup is not a valid Aurelia snapshot.');
+  if(!raw.integrity||raw.integrity.algorithm!=='SHA-256'||typeof raw.integrity.digest!=='string')throw new Error('The backup has no supported integrity checksum.');
+  const copy={...raw};delete copy.integrity;
+  if(await sha256Hex(JSON.stringify(copy))!==raw.integrity.digest)throw new Error('The backup checksum does not match its contents.');
+  validatePhotoArchive(raw.data,raw.photoArchive||{});
+  S.rst={...raw.data,photoArchive:raw.photoArchive||{}};S.rstMode='snapshot';
+  RECOVERY_CHECK_PENDING=false;
+  await restoreGo();
+ }catch(e){
+  console.error('Automatic backup recovery failed',e);
+  RECOVERY_CHECK_PENDING=false;persist();
+  toast('Automatic recovery failed: '+(e.message||'backup verification failed')+'. Use Restore from backup file.');
+ }
+};
 function restoreF(el){
  const f=el.files&&el.files[0];if(!f)return;
  f.text().then(async t=>{
@@ -997,8 +1033,22 @@ async function restoreGo(){
  }
 }
 const useMenu=m=>{Object.keys(MENU).forEach(k=>delete MENU[k]);Object.assign(MENU,m);S.menu=MENU};
-function persist(){try{const o={tab:S.tab,bk:S.bk};DK.forEach(k=>o[k]=S[k]);(window.__aureliaStorage||localStorage).setItem(SK,JSON.stringify(o))}catch(e){if(!S.qw){S.qw=1;toast('Device storage is full. Back up, then remove old items.')}}}
-function loadAll(){try{const o=JSON.parse((window.__aureliaStorage||localStorage).getItem(SK)||'null');if(!o)return;[...DK,'bk','tab'].forEach(k=>{if(o[k]!==undefined)S[k]=o[k]});useMenu(S.menu);S.aud.forEach(a=>a.at=new Date(a.at));S.led.forEach(l=>l[3]=new Date(l[3]));id=Math.max(id,...S.b.map(b=>b.id))}catch(e){}}
+function persist(){if(RECOVERY_CHECK_PENDING)return;try{const o={tab:S.tab,bk:S.bk};DK.forEach(k=>o[k]=S[k]);(window.__aureliaStorage||localStorage).setItem(SK,JSON.stringify(o))}catch(e){if(!S.qw){S.qw=1;toast('Device storage is full. Back up, then remove old items.')}}}
+let LOCAL_STATE_STATUS='missing',RECOVERY_CHECK_PENDING=false,AUTO_RECOVERY_REQUEST_ID=null;
+function loadAll(){
+ let raw=null;try{raw=(window.__aureliaStorage||localStorage).getItem(SK)}catch(e){LOCAL_STATE_STATUS='invalid';return}
+ if(!raw){LOCAL_STATE_STATUS='missing';return}
+ try{
+  const o=JSON.parse(raw);
+  if(!o||typeof o!=='object'||Array.isArray(o)||!Array.isArray(o.rooms)||!Array.isArray(o.b)||!Array.isArray(o.g)||!o.set||typeof o.set!=='object')throw new Error('Saved application state is incomplete');
+  [...DK,'bk','tab'].forEach(k=>{if(o[k]!==undefined)S[k]=o[k]});
+  useMenu(S.menu);S.aud.forEach(a=>a.at=new Date(a.at));S.led.forEach(l=>l[3]=new Date(l[3]));id=Math.max(id,...S.b.map(b=>b.id));LOCAL_STATE_STATUS='valid';
+ }catch(e){
+  LOCAL_STATE_STATUS='invalid';
+  try{(window.__aureliaStorage||localStorage).setItem(SK+'_recovery_quarantine_'+Date.now(),raw)}catch(_){}
+  console.warn('Saved application state failed validation; recovery will be attempted.',e);
+ }
+}
 /* autopilot */
 
 function openGlobalSearch(){
@@ -1126,7 +1176,7 @@ SUB.rest=()=>hd('Restaurant business')+`<div class="grid g2"><div class="card"><
 DK.push('restaurant','tableGuests','tableRooms');
 
 /* start */
-loadAll();if(!window.AureliaNative)S.bk.folder=false;S.restaurant=Object.assign({name:'The Dining Room',phone:'',addr:'',tax:'',upi:'',cur:S.set.cur||'K',gst:0,qr:'',logo:''},S.restaurant||{});if(!S.restaurant.cur)S.restaurant.cur=S.set.cur||'K';S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};cleanTableOrders();useMenu(S.menu);syncT();
+loadAll();RECOVERY_CHECK_PENDING=!!window.AureliaNative&&LOCAL_STATE_STATUS!=='valid';if(!window.AureliaNative)S.bk.folder=false;S.restaurant=Object.assign({name:'The Dining Room',phone:'',addr:'',tax:'',upi:'',cur:S.set.cur||'K',gst:0,qr:'',logo:''},S.restaurant||{});if(!S.restaurant.cur)S.restaurant.cur=S.set.cur||'K';S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};cleanTableOrders();useMenu(S.menu);syncT();
 const _r3=render;render=function(){try{if(!S||typeof S!=='object')throw new Error('Saved app state is unavailable');['rooms','b','g','t','exp','inv','aud','cancelled','financialLedger'].forEach(k=>{if(!Array.isArray(S[k]))S[k]=[]});if(!S.set||typeof S.set!=='object')S.set={name:'Aurelia',tag:'Peace, comfort and mindful hospitality.',cur:'K'};if(!S.au||typeof S.au!=='object')S.au={};if(!S.bk||typeof S.bk!=='object')S.bk={folder:false,label:'',last:null,hash:'',hist:[]};if(!Array.isArray(types))throw new Error('Room type data is unavailable');syncT();_r3();brand();persist()}catch(err){console.error('Aurelia startup/render wrapper failed',err);const v=$('#v');if(v)v.innerHTML='<div class="card" style="margin:24px;padding:20px"><h2>Recovery needed</h2><p class="lab">A saved setting or room record prevented the screen from loading. Your existing records have not been intentionally deleted. Use Backup/Restore before clearing app data.</p><button class="btn" onclick="location.reload()">Reload app</button><button class="btn ghost" onclick="S.tab=\'more\';S.sub=\'backup\';location.reload()">Open backup after reload</button></div>'}};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)auto()});setInterval(auto,60000);
 nat({type:'deviceBackupStatus',requestId:'bs'+Date.now()});
