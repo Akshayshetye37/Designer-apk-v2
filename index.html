@@ -442,7 +442,17 @@ function selectDiningGuest(id){
  const g=gOf(b.g)||{};
  const name=g.n||b.g||'Guest',phone=g.ph||'';
  const amount=t.o.reduce((sum,x)=>sum+(Number(x[1])||0),0);
- openS('<h2 class="foil">Confirm room charge</h2><div class="card" style="margin-bottom:12px"><div class="lab">Selected guest</div><h3>'+esc(name)+'</h3><div class="lab">Room '+esc(String(b.room))+'</div><label class="fld"><span>Guest phone</span><input id="dining-guest-phone" type="tel" value="'+esc(phone)+'" readonly></label><div class="row"><span class="lab">Table '+esc(String(t.n))+'</span><span class="tot">'+K(amount)+'</span></div></div><button class="btn" style="width:100%" onclick="confirmDiningRoomCharge('+Number(id)+')">Post charge to this room</button><button class="btn ghost" style="width:100%;margin-top:8px" onclick="toRoom()">Choose another room</button>');
+ openS('<h2 class="foil">Confirm room charge</h2><div class="card" style="margin-bottom:12px"><div class="lab">Selected guest</div><h3>'+esc(name)+'</h3><div class="lab">Room '+esc(String(b.room))+'</div><label class="fld"><span>Guest phone</span><input id="dining-guest-phone" type="tel" value="'+esc(phone)+'"></label><div class="row"><span class="lab">Table '+esc(String(t.n))+'</span><span class="tot">'+K(amount)+'</span></div><button class="btn sm ghost" style="margin-top:8px" onclick="saveDiningGuestPhone('+Number(id)+')">Save phone to guest</button></div><button class="btn" style="width:100%" onclick="confirmDiningRoomCharge('+Number(id)+')">Post charge to this room</button><button class="btn ghost" style="width:100%;margin-top:8px" onclick="toRoom()">Choose another room</button>');
+}
+function saveDiningGuestPhone(id){
+ const b=bk(id),g=b?gOf(b.g):null,field=$('#dining-guest-phone');
+ if(!b||!g||!field){toast('Guest profile could not be found');return;}
+ const phone=field.value.trim();
+ g.ph=phone;
+ const index=S.g.findIndex(x=>x===g||x.n===g.n);
+ if(index>=0)S.g[index]=g;
+ if(typeof persist==='function')persist();
+ toast('Guest phone saved');
 }
 function confirmDiningRoomCharge(id){
  const b=bk(id);
