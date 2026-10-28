@@ -128,8 +128,8 @@ public class MainActivity extends BridgeActivity {
   private void backupResult(String id, boolean ok, String error) {
     js("window.aureliaNativeDeviceBackupResult && window.aureliaNativeDeviceBackupResult(" + q(id) + "," + ok + "," + q(error) + ")");
   }
-  private void recoveryResult(String id, boolean ok, String payload) {
-    js("window.aureliaNativeRecoveryBackupResult && window.aureliaNativeRecoveryBackupResult(" + q(id) + "," + ok + "," + q(payload) + ")");
+  private void recoveryResult(String id, boolean ok, String payload, String fileName) {
+    js("window.aureliaNativeRecoveryBackupResult && window.aureliaNativeRecoveryBackupResult(" + q(id) + "," + ok + "," + q(payload) + "," + q(fileName) + ")");
   }
   private boolean hasBackupForHash(String dataHash) throws Exception {
     String saved = prefs.getString("backup_tree_uri", "");
@@ -147,13 +147,15 @@ public class MainActivity extends BridgeActivity {
     }
     return false;
   }
-  private String readLatestBackupFromSelectedFolder() throws Exception {
+  private JSONObject readLatestBackupFromSelectedFolder(String excludedJson) throws Exception {
     String saved = prefs.getString("backup_tree_uri", "");
     if (saved.isEmpty()) throw new IllegalStateException("No backup folder is selected.");
+    java.util.HashSet<String> excluded = new java.util.HashSet<>();
+    try { org.json.JSONArray values = new org.json.JSONArray(excludedJson == null ? "[]" : excludedJson); for (int i = 0; i < values.length(); i++) excluded.add(values.optString(i)); } catch (Exception ignored) { }
     Uri tree = Uri.parse(saved);
     Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
     String[] projection = { DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_LAST_MODIFIED };
-    Uri latest = null; long latestModified = Long.MIN_VALUE;
+    Uri latest = null; String latestName = null; long latestModified = Long.MIN_VALUE;
     try (Cursor cursor = getContentResolver().query(children, projection, null, null, null)) {
       if (cursor == null) throw new IllegalStateException("The selected backup folder cannot be read.");
       int idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
@@ -161,16 +163,19 @@ public class MainActivity extends BridgeActivity {
       int modifiedCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
       while (cursor.moveToNext()) {
         String name = cursor.getString(nameCol);
-        if (name == null || !name.startsWith("aurelia-backup-") || !name.endsWith(".json")) continue;
+        if (name == null || !name.startsWith("aurelia-backup-") || !name.endsWith(".json") || excluded.contains(name)) continue;
         long modified = modifiedCol >= 0 && !cursor.isNull(modifiedCol) ? cursor.getLong(modifiedCol) : 0L;
         if (latest == null || modified > latestModified) {
-          latestModified = modified;
+          latestModified = modified; latestName = name;
           latest = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(idCol));
         }
       }
     }
-    if (latest == null) throw new IllegalStateException("No Aurelia backup file was found in the selected folder.");
-    return new String(readDocument(latest), StandardCharsets.UTF_8);
+    if (latest == null) throw new IllegalStateException("No additional Aurelia backup file was found in the selected folder.");
+    JSONObject result = new JSONObject();
+    result.put("name", latestName);
+    result.put("payload", new String(readDocument(latest), StandardCharsets.UTF_8));
+    return result;
   }
 
   private static String sha256(byte[] bytes) throws Exception {
@@ -421,9 +426,12 @@ public class MainActivity extends BridgeActivity {
           final boolean folderSelected = selected, matchingBackupExists = backupExists;
           js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + "," + folderSelected + "," + matchingBackupExists + ")");
         } else if ("recoverLatestBackup".equals(type)) {
+          final String excluded = obj.optJSONArray("exclude") == null ? "[]" : obj.optJSONArray("exclude").toString();
           backupExecutor.execute(() -> {
-            try { recoveryResult(requestId, true, readLatestBackupFromSelectedFolder()); }
-            catch (Exception e) { recoveryResult(requestId, false, e.getMessage() == null ? "Could not read a backup from the selected folder." : e.getMessage()); }
+            try {
+              JSONObject result = readLatestBackupFromSelectedFolder(excluded);
+              recoveryResult(requestId, true, result.optString("payload", ""), result.optString("name", ""));
+            } catch (Exception e) { recoveryResult(requestId, false, e.getMessage() == null ? "Could not read a backup from the selected folder." : e.getMessage(), ""); }
           });
         } else if ("backupDeviceNow".equals(type)) {
           final String name = obj.optString("name", "aurelia-backup.json");
@@ -462,7 +470,7 @@ public class MainActivity extends BridgeActivity {
         String message = error.getMessage() == null ? "Native backup operation failed." : error.getMessage();
         if ("photoStore".equals(operationType) || "photoLoad".equals(operationType) || "photoArchive".equals(operationType) || "photoRestore".equals(operationType)) photoResult(operationRequestId, false, message);
         else if ("backupDeviceNow".equals(operationType)) backupResult(operationRequestId, false, message);
-        else if ("recoverLatestBackup".equals(operationType)) recoveryResult(operationRequestId, false, message);
+        else if ("recoverLatestBackup".equals(operationType)) recoveryResult(operationRequestId, false, message, "");
         else if ("deviceBackupStatus".equals(operationType)) js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(operationRequestId) + ",false)");
       }
     }
