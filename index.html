@@ -757,7 +757,15 @@ async async function pickDir(){
 let pendingBackupFolderRequestId=null;
 window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{
  if(!pendingBackupFolderRequestId||String(id)!==String(pendingBackupFolderRequestId))return;
- pendingBackupFolderRequestId=null;S.bk.folder=!!ok;S.bk.label=msg||'';persist();render();toast(ok?'Backup folder ready':'No folder chosen');if(ok)autoBackup();
+ pendingBackupFolderRequestId=null;
+ S.bk.folder=!!ok;
+ S.bk.label=msg||'';
+ if(!ok){
+  persist();render();
+  toast((msg&&String(msg).trim())||'Folder selection cancelled. No folder was saved.');
+  return;
+ }
+ persist();render();toast('Backup folder ready');autoBackup();
 };
 window.aureliaNativeDeviceBackupResult=(id,ok,err)=>{if(!BKB||String(id)!==String(BKB.requestId))return;bkDone(ok,err)};
 window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{if(pendingBackupFolderRequestId&&String(id)!==String(pendingBackupFolderRequestId))return;S.bk.folder=!!sel;persist()};
