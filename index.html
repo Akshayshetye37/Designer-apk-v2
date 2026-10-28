@@ -765,23 +765,51 @@ const DK=['rooms','b','t','today','hist','g','exp','inv','led','aud','fe','set',
 const curHash=()=>hashS(JSON.stringify(DK.map(k=>S[k])));
 function photoKeysIn(value,out=new Set(),seen=new Set()){if(!value||typeof value!=='object'||seen.has(value))return out;seen.add(value);if(!Array.isArray(value)&&typeof value.imgKey==='string'&&value.imgKey)out.add(value.imgKey);for(const v of Object.values(value))photoKeysIn(v,out,seen);return out}
 function validatePhotoArchive(data,archive){const keys=photoKeysIn(data),missing=[];if(!archive||typeof archive!=='object'||Array.isArray(archive))archive={};for(const key of keys){if(typeof archive[key]!=='string'||!/^data:image\//i.test(archive[key]))missing.push(key)}if(missing.length)throw new Error(missing.length+' original ID photo(s) are missing from the archive. No backup/restore was completed.');return keys.size}
+async function sha256Hex(text){
+ if(window.crypto&&crypto.subtle&&window.TextEncoder){const bytes=new TextEncoder().encode(text),digest=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')}
+ return hashS(text);
+}
+const cloneSnapshot=()=>JSON.parse(JSON.stringify(Object.fromEntries(DK.map(k=>[k,S[k]]))));
+async function createBackupSnapshot(){
+ const dataHash=curHash(),data=cloneSnapshot();
+ const originals=await photoArchive();
+ if(curHash()!==dataHash)throw new Error('Application data changed while the snapshot was being prepared. Try again.');
+ validatePhotoArchive(data,originals);
+ const snapshot={v:4,hotel:data.set?.name||S.set.name,at:new Date().toISOString(),data,photoArchive:originals,photoArchiveCount:Object.keys(originals).length};
+ const canonical=JSON.stringify(snapshot);
+ snapshot.integrity={algorithm:'SHA-256',digest:await sha256Hex(canonical)};
+ const payload=JSON.stringify(snapshot,null,2);
+ if(curHash()!==dataHash)throw new Error('Application data changed before the snapshot was committed. Try again.');
+ return {dataHash,payload,name:'aurelia-backup-'+ymd(0)+'-'+dataHash+'.json'};
+}
 async function runBackup(auto){
  if(BKB)return;
- const h=curHash();if(h===S.bk.hash){if(!auto)toast('Everything is already backed up');return}
- const nm='aurelia-backup-'+ymd(0)+'-'+h+'.json';
- let originals;try{originals=await photoArchive()}catch(e){console.error('Photo archive failed',e);toast('Backup cancelled: original ID photos could not be read. No backup was marked complete.');return}
- try{const photoCount=validatePhotoArchive(Object.fromEntries(DK.map(k=>[k,S[k]])),originals);if(photoCount)console.info('Backup includes '+photoCount+' referenced original ID photo(s).')}catch(e){console.error(e);toast('Backup cancelled: '+e.message);return}
- const pl=JSON.stringify({v:4,hotel:S.set.name,at:new Date().toISOString(),data:Object.fromEntries(DK.map(k=>[k,S[k]])),photoArchive:originals,photoArchiveCount:Object.keys(originals).length},null,2);
-  const requestId='bk'+Date.now(); BKB={h,nm,payload:pl,requestId};
-  if(nat({type:'backupDeviceNow',requestId,name:nm,payload:pl}))return;
- const saveToDir=window.BKDIR;
- if(saveToDir){saveToDir.getFileHandle(nm,{create:true}).then(f=>f.createWritable()).then(w=>w.write(pl).then(()=>w.close())).then(()=>bkDone(true),e=>bkDone(false,String(e)));return}
- BKB=null;
- const blob=new Blob([pl],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
- a.href=url;a.download=nm;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
- S.bk.hash=h;S.bk.last=new Date().toISOString();S.bk.hist=S.bk.hist||[];S.bk.hist.unshift({n:nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);persist();
- toast('Backup downloaded. Save it in your chosen backup folder or Google Drive.');
- if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render();
+ if(S.bk.hash===curHash()){if(!auto)toast('Everything is already backed up');return}
+ try{
+  const snap=await createBackupSnapshot();
+  if(S.bk.hash===snap.dataHash){if(!auto)toast('Everything is already backed up');return}
+  const requestId='bk'+Date.now();BKB={h:snap.dataHash,nm:snap.name,payload:snap.payload,requestId};
+  if(nat({type:'backupDeviceNow',requestId,name:snap.name,payload:snap.payload}))return;
+  const saveToDir=window.BKDIR;
+  if(saveToDir){
+   const stagingName='.'+snap.name+'.staging-'+requestId;
+   try{
+    const stage=await saveToDir.getFileHandle(stagingName,{create:true}),w=await stage.createWritable();
+    await w.write(snap.payload);await w.close();
+    if(await (await stage.getFile()).text()!==snap.payload)throw new Error('Staged backup read-back verification failed');
+    const final=await saveToDir.getFileHandle(snap.name,{create:true}),fw=await final.createWritable();
+    await fw.write(snap.payload);await fw.close();
+    if(await (await final.getFile()).text()!==snap.payload)throw new Error('Published backup read-back verification failed');
+    try{await saveToDir.removeEntry(stagingName)}catch(_){}
+    bkDone(true);return;
+   }catch(e){try{await saveToDir.removeEntry(stagingName)}catch(_){}throw e}
+  }
+  BKB=null;
+  const blob=new Blob([snap.payload],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=snap.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  toast('Backup download started. It is not marked verified until saved to a supported folder.');
+  if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render();
+ }catch(e){console.error('Backup snapshot failed',e);BKB=null;toast('Backup cancelled: '+(e&&e.message?e.message:'snapshot could not be verified'))}
 }
 function bkDone(ok,err){if(ok&&BKB){S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast('Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
 function autoBackup(){if(S.bk.folder&&!BKB&&curHash()!==S.bk.hash)runBackup(true)}
