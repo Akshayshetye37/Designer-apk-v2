@@ -2723,12 +2723,18 @@ function caReportRows(){
  const assets=cashReceived+roomReceivables+inventory;
  return {start,end,revenueRooms,revenueDining,revenueExtras,discounts,totalRevenue,expenses:expenseTotal,operatingProfit,roomReceivables,inventory,cashReceived,cancelledDeposits,assets};
 }
-window.exportCAReport=function(kind){
+window.exportCAReport=async function(kind){
  const d=caReportRows(),rows=[['HARI OM RETREAT — MANAGEMENT ACCOUNTS'],['Report',kind==='pl'?'Profit and Loss Statement':'Balance Sheet / Statement of Financial Position'],['Period start',d.start||'All available dates'],['Period end',d.end||'Current'],['Currency',S.set.cur||'INR'],[],['Account','Amount']];
  if(kind==='pl')rows.push(['Room revenue',d.revenueRooms],['Dining revenue',d.revenueDining],['Other guest revenue',d.revenueExtras],['Less: discounts',-d.discounts],['Total revenue',d.totalRevenue],['Operating expenses',-d.expenses],['Net operating profit/(loss)',d.operatingProfit]);
  else rows.push(['ASSETS'],['Recorded collections (cash proxy; reconcile to cash/bank)',d.cashReceived],['Trade receivables / guest balances',d.roomReceivables],['Inventory at recorded unit cost',d.inventory],['Total provisional assets',d.assets],[],['LIABILITIES requiring ledger input'],['Refunds pending manual processing',d.cancelledDeposits],['Supplier payables / taxes / guest deposits','Not recorded in current app ledger'],[],['EQUITY'],['Balancing equity','Cannot be certified without opening balances and liabilities'],[],['Basis','Management estimate from app records; not a statutory or audited financial statement. Reconcile cash, bank, taxes, payables, depreciation, owner capital and opening balances with a Chartered Accountant.']);
  const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n'),data='\uFEFF'+csv;
- const blob=new Blob([data],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=kind==='pl'?'profit-and-loss-management-accounts.csv':'balance-sheet-management-schedule.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('Management report exported as CSV');
+ const filename=kind==='pl'?'profit-and-loss-management-accounts.csv':'balance-sheet-management-schedule.csv';
+ const blob=new Blob([data],{type:'text/csv;charset=utf-8'});
+ try{
+  if(window.AureliaNative&&nat({type:'saveFile',requestId:'ca-csv-'+Date.now(),name:filename,mime:'text/csv',data:await fileBase64(blob)})){toast('Choose a folder to save the CSV');return}
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.rel='noopener';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);toast('Management report exported as CSV');
+ }catch(e){console.error('Management CSV export failed',e);toast('Could not open Save As. Try again or use the browser download option.')}
+
 };
 const _repBeforeCA=SUB.rep;
 SUB.rep=function(){
