@@ -15,7 +15,7 @@ if (!manifest.includes('android.permission.READ_EXTERNAL_STORAGE')) {
   manifest = manifest.replace(/<application\b/, '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <application');
 }
 if (!manifest.includes('android.permission.CAMERA')) {
-  manifest = manifest.replace(/<application\\b/, '    <uses-permission android:name="android.permission.CAMERA" />\\n    <application');
+  manifest = manifest.replace(/<application\b/, '    <uses-permission android:name="android.permission.CAMERA" />\n    <application');
 }
 if (!manifest.includes('android.permission.WRITE_EXTERNAL_STORAGE')) {
   manifest = manifest.replace(/<application\b/, '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <application');
