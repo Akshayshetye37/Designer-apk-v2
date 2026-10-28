@@ -971,7 +971,7 @@ dsave=function(){const draft=S.dr;if(draft?.k==='guest'){rdD();const name=draft.
 function dsaveProfileOnly(){rdD();const d=S.dr,g=d.g;g.n=g.n.trim();if(!g.n||!g.idn.trim()||!g.img){toast('Add the guest name, ID number and ID image');dsheet();return}const rec={...g,occ:d.oc,veh:d.vh};const ix=d.gi;if(ix==null)S.g.push(rec);else S.g[ix]=rec;aud('Guest profile saved','Not linked to a booking');closeS();render();toast('Guest profile saved; no room was booked')}
 function resvForGuest(name){const ix=S.g.findIndex(g=>g.n.toLowerCase()===name.toLowerCase());S.dr=newDraft('res');if(ix>=0){const g=S.g[ix];S.dr.g={n:g.n,ph:g.ph,em:g.em,idt:g.idt,idn:g.idn,img:g.img};S.dr.oc=JSON.parse(JSON.stringify(g.occ||[]));S.dr.vh=JSON.parse(JSON.stringify(g.veh||[]))}dsheet()}
 // Native OCR callback receives extracted fields; keep every value editable for staff verification.
-window.aureliaNativeOcrResult=(requestId,payload)=>{try{const d=typeof payload==='string'?JSON.parse(payload):payload,parsed=typeof parseIdOcrText==='function'?parseIdOcrText(d.text||''):{name:d.fullName||d.name||'',id:d.idNumber||d.id||'',text:d.text||''},name=parsed.name||d.fullName||d.name||'',id=parsed.id||d.idNumber||d.id||'',targets=window.__aureliaOcrTargets||{};if(targets[requestId]){const target=targets[requestId];delete targets[requestId];applyUploadedOcr(target,{name,id,type:detectedType,text:d.text||''});return}const el=$('#ocr-result');window._ocrSuggestion={name,id};if(el)el.innerHTML='<div class="ln"><span>OCR engine</span><b>Google ML Kit (on-device)</b></div><div class="ln"><span>Proposed full name</span><b>'+esc(name||'Not detected')+'</b></div><div class="ln"><span>Proposed ID number</span><b>'+esc(id||'Not detected')+'</b></div><div style="white-space:pre-wrap">'+esc(d.text||'')+'</div><div class="row" style="margin-top:8px"><button class="btn sm" onclick="applyOcrFields(window._ocrSuggestion.name,window._ocrSuggestion.id)">Use suggested fields</button></div><div class="lab">Check the original ID before saving.</div>'}catch(e){const el=$('#ocr-result');if(el)el.textContent='Could not parse OCR result. Please try again.'}};function applyOcrFields(name,id){if($('#d1')&&name)$('#d1').value=name;if($('#d5')&&id)$('#d5').value=id;toast('Suggested fields filled; verify before saving')}
+window.aureliaNativeOcrResult=(requestId,payload)=>{try{const d=typeof payload==='string'?JSON.parse(payload):payload,parsed=typeof parseIdOcrText==='function'?parseIdOcrText(d.text||''):{name:d.fullName||d.name||'',id:d.idNumber||d.id||'',text:d.text||''},name=parsed.name||d.fullName||d.name||'',id=parsed.id||d.idNumber||d.id||'',targets=window.__aureliaOcrTargets||{};if(targets[requestId]){const target=targets[requestId];delete targets[requestId];applyUploadedOcr(target,{name,id,type:d.docType&&d.docType!=='OTHER'?d.docType:parsed.type,text:d.text||''});return}const el=$('#ocr-result');window._ocrSuggestion={name,id};if(el)el.innerHTML='<div class="ln"><span>OCR engine</span><b>Google ML Kit (on-device)</b></div><div class="ln"><span>Proposed full name</span><b>'+esc(name||'Not detected')+'</b></div><div class="ln"><span>Proposed ID number</span><b>'+esc(id||'Not detected')+'</b></div><div style="white-space:pre-wrap">'+esc(d.text||'')+'</div><div class="row" style="margin-top:8px"><button class="btn sm" onclick="applyOcrFields(window._ocrSuggestion.name,window._ocrSuggestion.id)">Use suggested fields</button></div><div class="lab">Check the original ID before saving.</div>'}catch(e){const el=$('#ocr-result');if(el)el.textContent='Could not parse OCR result. Please try again.'}};function applyOcrFields(name,id){if($('#d1')&&name)$('#d1').value=name;if($('#d5')&&id)$('#d5').value=id;toast('Suggested fields filled; verify before saving')}
 // More menu has explicit restaurant, dining bills, guests, and pending payment list.
 TL.unshift(['rest','Restaurant business','Separate billing, identity & sales','POS'],['guest-export','Guest / Room Export','PDF with ID photos & room booking','Guests']);
 SUB['guest-export']=()=>hd('Guest / Room Export')+`<div class="card"><h3>Export one booking</h3><div class="lab">A single guest and room record bundle. Includes stay details, all guest ID images, folio lines and payment totals. Store exports securely.</div><button class="btn" style="margin-top:12px" onclick="guestBookingExport()">Choose booking &amp; export</button></div>`;
@@ -997,17 +997,19 @@ render();auto();
 window.__aureliaOcrTargets=window.__aureliaOcrTargets||{};
 function detectIndianIdType(raw){
  const t=String(raw||'').toUpperCase();
- if(/UNIQUE IDENTIFICATION AUTHORITY|UIDAI|AADHAAR|आधार|VID\s*[:#]/i.test(t))return 'Aadhaar (UIDAI)';
- if(/INCOME TAX DEPARTMENT|PERMANENT ACCOUNT NUMBER|\bPAN\b/i.test(t))return 'PAN card';
- if(/ELECTION COMMISSION OF INDIA|ELECTOR PHOTO IDENTITY|EPIC|VOTER/i.test(t))return 'Voter ID (EPIC)';
- if(/DRIVING LICEN[CS]E|TRANSPORT DEPARTMENT|\bDL\s*(?:NO|NUMBER)/i.test(t))return 'Driving licence';
- if(/REPUBLIC OF INDIA|PASSPORT|P<[A-Z]{3}/i.test(t))return 'Passport';
- if(/RATION CARD|FOOD AND CIVIL SUPPLIES/i.test(t))return 'Ration card (supporting ID only)';
+ if(/UNIQUE IDENTIFICATION AUTHORITY|UIDAI|AADHAAR|आधार|आधार संख्या|VID\s*[:#]/i.test(t))return 'Aadhaar (UIDAI)';
+ if(/INCOME TAX DEPARTMENT|PERMANENT ACCOUNT NUMBER|\bPAN\s*(?:CARD|NO|NUMBER)?\b/i.test(t))return 'PAN card';
+ if(/ELECTION COMMISSION OF INDIA|ELECTOR PHOTO IDENTITY|VOTER(?:'S)? ID|VOTER IDENTITY|EPIC|निर्वाचक पहचान|मतदाता पहचान|নির্বাচন কমিশন/i.test(t))return 'Voter ID (EPIC)';
+ if(/DRIVING LICEN[CS]E|MOTOR VEHICLE DEPARTMENT|TRANSPORT DEPARTMENT|\bDL\s*(?:NO|NUMBER)\b|चालक अनुज्ञप्ति/i.test(t))return 'Driving licence';
+ if(/PASSPORT|P<[A-Z]{3}|REPUBLIC OF INDIA/i.test(t))return 'Passport';
+ if(/RATION CARD|FOOD AND CIVIL SUPPLIES|PUBLIC DISTRIBUTION SYSTEM/i.test(t))return 'Ration card (supporting ID only)';
+ if(/UNIQUE DISABILITY ID|UDID CARD/i.test(t))return 'UDID (Disability ID)';
+ if(/AYUSHMAN BHARAT HEALTH ACCOUNT|\bABHA\b/i.test(t))return 'ABHA (health ID)';
  if(/NATIONAL IDENTITY|NATIONAL ID|NRC/i.test(t))return 'NRC / National ID (other country)';
  return 'Not confidently identified';
 }
 function aadhaarVerhoeffValid(value){
- const d=[[0,1,2,3,4,5,6,7,8,9],[1,2,3,4,0,6,7,8,9,5],[2,3,4,0,1,7,8,9,5,6],[3,4,0,1,2,8,9,5,6,7],[4,0,1,2,3,9,5,6,7,8],[5,9,8,7,6,0,4,3,2,1],[6,5,9,8,7,1,0,4,3,2],[7,6,5,9,8,2,1,0,4,3],[8,7,6,5,9,3,2,1,0,4],[9,8,7,6,5,4,3,2,1,0]];
+ const d=[[0,1,2,3,4,5,6,7,8,9],[1,2,3,4,0,6,7,8,9,5],[2,3,4,0,1,7,8,9,5,6],[3,4,0,1,2,8,9,5,6,7],[4,0,1,2,3,9,5,6,7,8],[5,9,8,7,6,0,4,3,2,1],[6,5,9,8,7,1,0,4,3,2],[7,6,5,9,8,2,1,0,4,3],[8,7,6,5,9,3,2,1,0],[9,8,7,6,5,4,3,2,1,0]];
  const p=[[0,1,2,3,4,5,6,7,8,9],[1,5,7,6,2,8,3,0,9,4],[5,8,0,3,7,9,6,1,4,2],[8,9,1,6,0,4,3,5,2,7],[9,4,5,3,1,2,6,8,7,0],[4,2,8,6,5,7,3,9,0,1],[2,7,9,3,8,0,6,4,1,5],[7,0,4,6,9,1,3,2,5,8]];
  if(!/^\d{12}$/.test(value))return false;
  let c=0;const a=value.split('').reverse().map(Number);
@@ -1024,59 +1026,74 @@ function passportMrzCheckDigitValid(line,fieldStart,fieldLength,checkPos){
 }
 function parseIdOcrText(raw){
  const text=String(raw||'').replace(/\r/g,'');
- const lines=text.split('\n').map(v=>v.replace(/[|]/g,'I').replace(/\s+/g,' ').trim()).filter(Boolean);
- const joined=lines.join('\n'),type=detectIndianIdType(joined);
- const excluded=/GOVERNMENT|REPUBLIC|AUTHORITY|IDENTITY|NATIONAL|PASSPORT|DRIVING|LICEN[CS]E|DATE OF BIRTH|\bDOB\b|MALE|FEMALE|ADDRESS|INDIA|INDIAN|SIGNATURE|NRC CARD|REGISTRATION CARD|ELECTION COMMISSION|INCOME TAX|UNIQUE IDENTIFICATION/i;
+ const lines=text.split('\n').map(v=>v.replace(/[|]/g,'I').replace(/[ \t]+/g,' ').trim()).filter(Boolean);
+ const joined=lines.join('\n'),type=detectIndianIdType(joined),compact=lines.join(' ').toUpperCase();
+ const excluded=/GOVERNMENT|REPUBLIC|AUTHORITY|IDENTITY|NATIONAL|PASSPORT|DRIVING|LICEN[CS]E|DATE OF BIRTH|\bDOB\b|\bMALE\b|\bFEMALE\b|ADDRESS|INDIA|INDIAN|SIGNATURE|NRC CARD|REGISTRATION CARD|ELECTION COMMISSION|INCOME TAX|UNIQUE IDENTIFICATION|ELECTOR PHOTO|VOTER ID|PERMANENT ACCOUNT|AADHAAR|UIDAI|RATION CARD|DATE OF ISSUE|VALIDITY|BLOOD GROUP|ORGAN DONOR/i;
+ const relation=/^(?:father(?:'s)? name|mother(?:'s)? name|husband(?:'s)? name|wife(?:'s)? name|guardian(?:'s)? name|relative(?:'s)? name|पिता का नाम|पति का नाम|মাতার নাম|পিতার নাম)\b/i;
+ const label=/^(?:(?:elector(?:'s)?|card ?holder(?:'s)?|applicant(?:'s)?|full|holder(?:'s)?|individual(?:'s)?|candidate(?:'s)?)\s+)?(?:full\s*)?name(?:\s+of\s+(?:the\s+)?(?:holder|elector|applicant))?|elector(?:'s)?\s+name|card ?holder(?:'s)?\s+name|applicant(?:'s)?\s+name|name\s+of\s+(?:the\s+)?(?:holder|elector|applicant)|given\s+names?|surname|family\s+name|forenames?|नाम|नामांकित व्यक्ति/i;
+ const cleanName=v=>String(v||'').replace(/^[\s:;#.,-]+|[\s:;#.,-]+$/g,'').replace(/[^\\p{L} .'’-]/gu,' ').replace(/\s+/g,' ').trim();
  const names=[];
- for(const line of lines){
-  if(excluded.test(line))continue;
-  const m=line.match(/^(?:full\s*name|name\s*of\s*holder|name|surname|family\s*name|given\s*names?|forenames?)\s*[:#.-]?\s*(.+)$/i);
-  if(m){const v=m[1].replace(/[^\p{L} .'’-]/gu,' ').replace(/\s+/g,' ').trim();if(v.length>=3&&!/\d/.test(v))names.push(v)}
+ for(let i=0;i<lines.length;i++){
+  const line=lines[i];
+  if(relation.test(line))continue;
+  const colon=line.match(/^(.{2,42}?)\s*[:：]\s*(.+)$/u);
+  if(colon&&label.test(colon[1])&&!relation.test(colon[1])){
+   const v=cleanName(colon[2]);
+   if(v.length>=2&&v.length<=70&&!/\d/.test(v)&&!excluded.test(v))names.push({v,score:10});
+  }
+  const m=line.match(/^(?:full\s*name|name\s*of\s*(?:the\s*)?(?:holder|elector|applicant)|(?:elector(?:'s)?|card ?holder(?:'s)?|applicant(?:'s)?)\s+name|name|surname|family\s+name|given\s+names?|forenames?)\s*[:#.-]?\s*(.+)$/i);
+  if(m&&!relation.test(line)){
+   const v=cleanName(m[1]);
+   if(v.length>=2&&v.length<=70&&!/\d/.test(v)&&!excluded.test(v))names.push({v,score:/elector|holder|applicant|full name/i.test(line)?9:7});
+  }
+  // Some cards print the label on one line and the value on the next.
+  if(label.test(line)&&!relation.test(line)&&i+1<lines.length){
+   const next=lines[i+1];
+   if(!excluded.test(next)&&!relation.test(next)&&next.length>=2&&next.length<=70&&!/\d/.test(next)&&/^[\p{L}][\p{L} .'’-]+$/u.test(next))names.push({v:cleanName(next),score:6});
+  }
  }
- let name=names.find(v=>!/^(surname|given names?|forenames?)$/i.test(v))||'';
+ let name=names.sort((a,b)=>b.score-a.score)[0]?.v||'';
  if(!name){
-  const candidate=lines.find(v=>v.length>=5&&v.length<=60&&!excluded.test(v)&&!/[\d@]/.test(v)&&/^[\p{L}][\p{L} .'’-]+$/u.test(v)&&v.split(/\s+/).length>=2);
-  if(candidate)name=candidate.trim();
+  const candidate=lines.find(v=>v.length>=5&&v.length<=60&&!excluded.test(v)&&!relation.test(v)&&!/[0-9@]/.test(v)&&/^[\p{L}][\p{L} .'’-]+$/u.test(v)&&v.split(/\s+/).length>=2);
+  if(candidate)name=cleanName(candidate);
  }
  let id='',checksumVerified=false;
- const compact=lines.join(' ').toUpperCase();
  if(type==='Aadhaar (UIDAI)'){
-  const numericCandidates=compact.match(/(?:\d[\s-]*){12}/g)||[];
-  for(const candidate of numericCandidates){
-   let v=candidate.replace(/\D/g,'');
-   if(v.length===12){id=v;checksumVerified=aadhaarVerhoeffValid(v);if(checksumVerified)break}
-  }
-  // Do not silently convert letters to digits for Aadhaar: only propose a candidate when checksum validates.
+  const candidates=compact.match(/(?:\d[\s-]*){12}/g)||[];
+  for(const candidate of candidates){const v=candidate.replace(/\D/g,'');if(v.length===12){if(!id)id=v;if(aadhaarVerhoeffValid(v)){id=v;checksumVerified=true;break}}}
  }else if(type==='PAN card'){
   const candidates=compact.match(/[A-Z0-9]{10}/g)||[];
   id=candidates.find(v=>/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v))||'';
   checksumVerified=!!id;
  }else if(type==='Voter ID (EPIC)'){
-  const candidates=compact.match(/[A-Z0-9]{10}/g)||[];
-  id=candidates.find(v=>/^[A-Z]{3}[0-9]{7}$/.test(v))||'';
+  const voterLines=lines.filter(v=>/\b(?:EPIC|VOTER|IDENTITY CARD|ELECTOR|CARD NO|ID NO)\b/i.test(v));
+  const source=(voterLines.join(' ')+' '+compact).toUpperCase();
+  const candidates=source.match(/[A-Z]{2,4}[\s/-]?\d{6,8}|[A-Z0-9]{8,12}/g)||[];
+  id=candidates.map(v=>v.replace(/[\s/-]/g,'')).find(v=>/^[A-Z]{2,4}\d{6,8}$/.test(v)&&!/^IN\d{6,8}$/.test(v))||'';
   checksumVerified=!!id;
  }else if(type==='Driving licence'){
-  const candidates=compact.match(/[A-Z]{2}\s*[-/]?\s*\d{2}\s*[-/]?\s*\d{11,13}/g)||[];
-  id=candidates.map(v=>v.replace(/\s+/g,'').replace(/[/-]/g,'')).find(v=>/^[A-Z]{2}\d{13,15}$/.test(v))||'';
+  const candidates=compact.match(/[A-Z]{2}\s*[-/]?\s*\d{2}\s*[-/]?\s*(?:\d{4}\s*[-/]?\s*)?\d{6,11}/g)||[];
+  id=candidates.map(v=>v.replace(/[\s/-]/g,'')).find(v=>/^[A-Z]{2}\d{12,16}$/.test(v))||'';
   checksumVerified=!!id;
  }else if(type==='Passport'){
-  const mrz=lines.map(v=>v.replace(/\s/g,'').toUpperCase()).find(v=>/^P<[A-Z]{3}/.test(v));
-  if(mrz){
-   const line2=lines.map(v=>v.replace(/\s/g,'').toUpperCase()).find(v=>/^[A-Z0-9<]{35,44}$/.test(v)&&/[0-9]{6}[MF<][0-9]{6}/.test(v));
-   if(line2){
-    const candidate=line2.slice(0,9);
-    if(/^[A-Z]\d{7}<?$/.test(candidate))id=candidate.replace(/</g,'');
-    // MRZ check digit positions are validated only when the full TD3 line is present.
-    if(line2.length>=44){checksumVerified=passportMrzCheckDigitValid(line2,0,9,9)&&passportMrzCheckDigitValid(line2,13,6,19)&&passportMrzCheckDigitValid(line2,21,6,27)}
-   }
+  const compactLines=lines.map(v=>v.replace(/\s/g,'').toUpperCase());
+  const line2=compactLines.find(v=>/^[A-Z0-9<]{35,44}$/.test(v)&&/[0-9]{6}[MF<][0-9]{6}/.test(v));
+  if(line2){
+   const candidate=line2.slice(0,9);
+   if(/^[A-Z0-9]{8,9}$/.test(candidate))id=candidate.replace(/</g,'');
+   if(line2.length>=44)checksumVerified=passportMrzCheckDigitValid(line2,0,9,9)&&passportMrzCheckDigitValid(line2,13,6,19)&&passportMrzCheckDigitValid(line2,21,6,27);
   }
-  if(!id){const candidates=compact.match(/\b[A-Z]\d{7}\b/g)||[];id=candidates[0]||''}
+  if(!id){const candidates=compact.match(/\b[A-Z][A-Z0-9]{6,8}\b/g)||[];id=candidates.find(v=>/[A-Z]/.test(v)&&/\d/.test(v))||''}
+ }else if(type==='UDID (Disability ID)'){
+  const candidates=compact.match(/\b[A-Z0-9/-]{6,20}\b/g)||[];
+  id=candidates.find(v=>/\d/.test(v)&&!excluded.test(v))||'';
  }else{
   const candidates=compact.match(/\b[A-Z0-9][A-Z0-9/-]{5,}\b/g)||[];
-  id=candidates.find(v=>/\d/.test(v)&&!/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(v))||'';
+  id=candidates.find(v=>/\d/.test(v)&&!/^(\d{1,2}[-/]){2}\d{2,4}$/.test(v))||'';
  }
  return {name,id,text:lines.join('\n'),type,checksumVerified,confidence:id?(checksumVerified?'high':'medium'):'low'};
 }
+
 async function ocrUploadedId(file,target){
  if(!file||!S.dr)return;
  if(S.set.ocrEnabled===false){toast('OCR is disabled in Settings');return}
