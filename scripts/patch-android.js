@@ -41,7 +41,23 @@ if (fs.existsSync(iconSvg)) {
 
 const javaDir = path.join(appDir, 'java', 'com', 'aurelia', 'pms');
 fs.mkdirSync(javaDir, { recursive: true });
-const javaPath = path.join(javaDir, 'MainActivity.java');
+
+const appGradleGroovy = path.join(appDir, 'build.gradle');
+const appGradleKts = path.join(appDir, 'build.gradle.kts');
+if (fs.existsSync(appGradleGroovy)) {
+  let gradle = fs.readFileSync(appGradleGroovy, 'utf8');
+  if (!gradle.includes('com.google.mlkit:text-recognition:')) {
+    gradle = gradle.replace(/dependencies\\s*\\{/, match => match + "\\n    implementation 'com.google.mlkit:text-recognition:16.0.1'");
+    fs.writeFileSync(appGradleGroovy, gradle);
+  }
+} else if (fs.existsSync(appGradleKts)) {
+  let gradle = fs.readFileSync(appGradleKts, 'utf8');
+  if (!gradle.includes('com.google.mlkit:text-recognition:')) {
+    gradle = gradle.replace(/dependencies\\s*\\{/, match => match + '\\n    implementation("com.google.mlkit:text-recognition:16.0.1")');
+    fs.writeFileSync(appGradleKts, gradle);
+  }
+}
+\nconst javaPath = path.join(javaDir, 'MainActivity.java');
 const java = String.raw`
 package com.aurelia.pms;
 
@@ -55,6 +71,12 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.provider.DocumentsContract;
 import android.util.Base64;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import android.webkit.JavascriptInterface;
 import org.json.JSONObject;
 import com.getcapacitor.BridgeActivity;
@@ -141,6 +163,28 @@ public class MainActivity extends BridgeActivity {
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
             startActivityForResult(intent, PICK_BACKUP_FOLDER);
           });
+        } else if ("recognizeId".equals(type)) {
+          String imageData = obj.optString("data", "");
+          byte[] imageBytes = Base64.decode(imageData, Base64.DEFAULT);
+          Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+          if (bitmap == null) throw new IllegalArgumentException("Could not decode ID image");
+          InputImage image = InputImage.fromBitmap(bitmap, 0);
+          TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+          recognizer.process(image)
+            .addOnSuccessListener(result -> {
+              JSONObject payload = new JSONObject();
+              try { payload.put("status", "OK"); payload.put("text", result.getText()); } catch (Exception ignored) { }
+              js("window.aureliaNativeOcrResult && window.aureliaNativeOcrResult(" + q(requestId) + "," + q(payload.toString()) + ")");
+              bitmap.recycle();
+              recognizer.close();
+            })
+            .addOnFailureListener(error -> {
+              JSONObject payload = new JSONObject();
+              try { payload.put("status", "ERROR"); payload.put("message", error == null ? "Text recognition failed" : String.valueOf(error.getMessage())); } catch (Exception ignored) { }
+              js("window.aureliaNativeOcrResult && window.aureliaNativeOcrResult(" + q(requestId) + "," + q(payload.toString()) + ")");
+              bitmap.recycle();
+              recognizer.close();
+            });
         } else if ("deviceBackupStatus".equals(type)) {
           boolean selected = !prefs.getString("backup_tree_uri", "").isEmpty();
           js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + "," + selected + ")");
