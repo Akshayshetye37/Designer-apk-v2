@@ -827,20 +827,34 @@ const restCur=()=>S.restaurant.cur||S.set.cur||'K';
 const rk=n=>restCur()+Math.round(Number(n)||0).toLocaleString('en-US');
 function tableMeta(n){S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};const saved=S.tableGuests[n];return {name:typeof saved==='string'?saved:(saved?.name||''),phone:typeof saved==='object'?(saved.phone||''):'',room:S.tableRooms[n]||''}}
 function saveTableMeta(n){const name=$('#tg-name')?.value?.trim()||'',phone=$('#tg-phone')?.value?.trim()||'',room=$('#tg-room')?.value||'';S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};S.tableGuests[n]={name,phone};S.tableRooms[n]=room;persist();toast('Customer and billing details saved')}
+function tableRoomBooking(room){
+ const key=String(room??'').trim().toLowerCase();
+ return (S.b||[]).find(b=>String(b.room??b.roomNo??b.roomNumber??'').trim().toLowerCase()===key&&b.st==='in');
+}
+function tableRoomGuestDetails(room){
+ const b=tableRoomBooking(room);if(!b)return null;
+ const name=String(b.g||b.guest||b.guestName||b.name||'').trim();
+ const phone=guestPhoneFor(name,b)||String(b.phone||b.ph||b.tel||'').trim();
+ return {booking:b,name,phone};
+}
 function fillTableGuestFromRoom(n){
- const room=$('#tg-room')?.value||'';if(!room)return;
- const b=(S.b||[]).find(x=>String(x.room)===String(room)&&x.st==='in');if(!b)return;
- const name=$('#tg-name'),phone=$('#tg-phone');
- if(name&&!name.value)name.value=b.g||b.guest||'';
- if(phone&&!phone.value)phone.value=b.phone||b.ph||b.tel||'';
+ const room=$('#tg-room')?.value||'';
  S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};
- S.tableGuests[n]={name:name?.value?.trim()||b.g||'',phone:phone?.value?.trim()||b.phone||b.ph||b.tel||''};
+ if(!room){S.tableRooms[n]='';persist();return}
+ const details=tableRoomGuestDetails(room);
+ if(!details){toast('No currently occupied booking found for this room');return}
+ const name=$('#tg-name'),phone=$('#tg-phone');
+ // A room selection is authoritative: replace stale table values with this room's guest.
+ if(name)name.value=details.name;
+ if(phone)phone.value=details.phone;
+ S.tableGuests[n]={name:details.name,phone:details.phone};
  S.tableRooms[n]=room;persist();
 }
+
 // Do not create phantom values or NaN rows if older local data is malformed.
 function cleanTableOrders(){S.t=(Array.isArray(S.t)?S.t:[]).filter(Boolean);S.t.forEach((t,i)=>{t.n=Number(t.n)||i+1;t.s=Math.max(1,Number(t.s)||2);t.o=(Array.isArray(t.o)?t.o:[]).filter(x=>Array.isArray(x)&&x.length>=2&&Number.isFinite(Number(x[1]))).map(x=>[String(x[0]),Number(x[1]),x[2]||'din']);});if(!S.t.length)S.t=[{n:1,s:2,o:[]}];S.tb=Math.max(1,Math.min(S.t.length,Number(S.tb)||1))}
 const oldDining=V.dining;
-V.dining=()=>{cleanTableOrders();const html=oldDining();const t=S.t[S.tb-1],m=tableMeta(t.n),rooms=S.b.filter(b=>b.st==='in');if(m.room){const rb=rooms.find(b=>String(b.room)===String(m.room));if(rb){if(!m.name)m.name=rb.g||rb.guest||'';if(!m.phone)m.phone=rb.phone||rb.ph||rb.tel||''}}
+V.dining=()=>{cleanTableOrders();const html=oldDining();const t=S.t[S.tb-1],m=tableMeta(t.n),rooms=S.b.filter(b=>b.st==='in');if(m.room){const details=tableRoomGuestDetails(m.room);if(details){m.name=details.name;m.phone=details.phone;S.tableGuests[t.n]={name:details.name,phone:details.phone};S.tableRooms[t.n]=m.room;persist()}}
  const controls=`<div class="card" style="margin-top:14px"><div class="row"><h3>Guest &amp; billing details</h3><span class="tag ready">Restaurant ledger</span></div><div class="lab" style="margin:4px 0 10px">Table ${t.n} · ${t.s} seats. This bill stays separate from hotel folios unless you explicitly post it to an occupied room.</div><label class="fld"><span>Customer full name (printed on bill)</span><input id="tg-name" placeholder="Walk-in customer name" value="${esc(m.name||'')}"></label><label class="fld"><span>Customer phone number (printed on bill)</span><input id="tg-phone" type="tel" inputmode="tel" placeholder="Phone number" value="${esc(m.phone||'')}"></label><label class="fld"><span>Charge destination</span><select id="tg-room" onchange="fillTableGuestFromRoom(${t.n})"><option value="">Restaurant / walk-in bill (separate)</option>${rooms.map(b=>`<option value="${b.room}" ${m.room===b.room?'selected':''}>${'Room '+b.room+' · '+esc(b.g)}</option>`).join('')}</select></label><button class="btn ghost sm" onclick="saveTableMeta(${t.n})">Save bill details</button></div>`;
  return html.replace('</div></div>`', '</div></div>`')+controls;
 };
