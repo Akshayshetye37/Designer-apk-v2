@@ -634,7 +634,7 @@ function rdD(){
 }
 
 const mainPh=el=>{const f=el.files&&el.files[0];if(!f)return;shrink(f,(u,key)=>{rdD();S.dr.g.img=u;if(key)S.dr.g.imgKey=key;else delete S.dr.g.imgKey;dsheet();ocrUploadedId(f,'main')})},occPh=(i,el)=>{const f=el.files&&el.files[0];if(!f)return;shrink(f,(u,key)=>{rdD();if(S.dr.oc[i]){S.dr.oc[i].img=u;if(key)S.dr.oc[i].imgKey=key;else delete S.dr.oc[i].imgKey}dsheet();ocrUploadedId(f,'occ:'+i)})};
-const dadd=k=>{try{rdD();if(!S.dr[k])S.dr[k]=[];S.dr[k].push(k==='oc'?{n:'',rel:'',idt:'NRC',idn:'',img:''}:{reg:'',ty:''});dsheet()}catch(e){console.error('Could not add '+k,e);toast('Could not add '+(k==='oc'?'occupant':'vehicle')+'. Please try again.')}};const ddel=(k,i)=>{rdD();S.dr[k].splice(i,1);dsheet()}const dre=()=>{rdD();dsheet()};
+const dadd=k=>{try{rdD();if(!S.dr[k])S.dr[k]=[];S.dr[k].push(k==='oc'?{n:'',rel:'',idt:'NRC',idn:'',img:''}:{reg:'',ty:''});dsheet()}catch(e){console.error('Could not add '+k,e);toast('Could not add '+(k==='oc'?'occupant':'vehicle')+'. Please try again.')}};const ddel=(k,i)=>{rdD();S.dr[k].splice(i,1);dsheet()};const dre=()=>{rdD();dsheet()};
 function dsheet(){
   const d=S.dr, g=d.g, res=d.k==='res';
   const f=(id,l,v,t='text')=>`<label class="fld"><span>${l}</span><input id="${id}" type="${t}" value="${esc(v||'')}"></label>`;
