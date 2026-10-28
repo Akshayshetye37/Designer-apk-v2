@@ -199,6 +199,99 @@ public class MainActivity extends BridgeActivity {
       out.write(bytes); out.flush();
     }
   }
+  private static final class BackupCandidate {
+    final Uri uri;
+    final long modified;
+    final boolean valid;
+    final boolean protectedNew;
+    BackupCandidate(Uri uri, long modified, boolean valid, boolean protectedNew) {
+      this.uri = uri; this.modified = modified; this.valid = valid; this.protectedNew = protectedNew;
+    }
+  }
+
+  private boolean isManagedBackupName(String name) {
+    return name != null && name.matches("^aurelia-backup-.*\\.json$");
+  }
+
+  private boolean isStructurallyValidBackup(byte[] bytes) {
+    try {
+      JSONObject backup = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+      JSONObject data = backup.optJSONObject("data");
+      if (backup.optInt("v", -1) != 4 || data == null
+          || data.optJSONArray("rooms") == null || data.optJSONArray("b") == null
+          || data.optJSONObject("set") == null) return false;
+      JSONObject archive = backup.optJSONObject("photoArchive");
+      if (archive != null) {
+        java.util.Iterator<String> keys = archive.keys();
+        while (keys.hasNext()) {
+          String key = keys.next();
+          String value = archive.optString(key, "");
+          if (key.isEmpty() || !value.matches("(?i)^data:image/.*")) return false;
+        }
+      }
+      JSONObject integrity = backup.optJSONObject("integrity");
+      if (integrity != null) {
+        if (!"SHA-256".equals(integrity.optString("algorithm", ""))
+            || !integrity.optString("digest", "").matches("(?i)^[a-f0-9]{64}$")) return false;
+      }
+      return true;
+    } catch (Exception invalid) {
+      return false;
+    }
+  }
+
+  /**
+   * Retain the three newest structurally valid managed backups. The just-written,
+   * read-back-verified backup is pinned so provider timestamp quirks cannot evict it.
+   * Only Aurelia backup JSON files are eligible; unrelated files are never touched.
+   */
+  private void pruneBackupFilesToRetention(Uri root, Uri protectedNew, int maximum) throws Exception {
+    Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(
+        root, DocumentsContract.getDocumentId(root));
+    String[] projection = {
+      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+      DocumentsContract.Document.COLUMN_LAST_MODIFIED
+    };
+    java.util.ArrayList<BackupCandidate> candidates = new java.util.ArrayList<>();
+    try (Cursor cursor = getContentResolver().query(children, projection, null, null, null)) {
+      if (cursor == null) throw new IllegalStateException("Could not list the selected backup folder for retention.");
+      int idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
+      int nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+      int modifiedCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
+      while (cursor.moveToNext()) {
+        String name = cursor.getString(nameCol);
+        if (!isManagedBackupName(name)) continue;
+        Uri fileUri = DocumentsContract.buildDocumentUriUsingTree(root, cursor.getString(idCol));
+        long modified = modifiedCol >= 0 && !cursor.isNull(modifiedCol) ? cursor.getLong(modifiedCol) : 0L;
+        boolean protectedFile = fileUri.equals(protectedNew);
+        boolean valid = isStructurallyValidBackup(readDocument(fileUri));
+        candidates.add(new BackupCandidate(fileUri, modified, valid, protectedFile));
+      }
+    }
+    candidates.sort((a, b) -> {
+      if (a.protectedNew != b.protectedNew) return a.protectedNew ? -1 : 1;
+      if (a.valid != b.valid) return a.valid ? -1 : 1;
+      return Long.compare(b.modified, a.modified);
+    });
+    int retainedValid = 0;
+    Exception deletionFailure = null;
+    for (BackupCandidate candidate : candidates) {
+      boolean keep = candidate.valid && retainedValid < maximum;
+      if (keep) { retainedValid++; continue; }
+      try {
+        if (!DocumentsContract.deleteDocument(getContentResolver(), candidate.uri)) {
+          throw new IllegalStateException("The storage provider refused to remove an obsolete backup.");
+        }
+      } catch (Exception e) {
+        if (deletionFailure == null) deletionFailure = e;
+        else deletionFailure.addSuppressed(e);
+      }
+    }
+    if (deletionFailure != null) throw new IllegalStateException(
+        "Backup was saved, but one or more obsolete backup files could not be removed.", deletionFailure);
+  }
+
   private String writeToSelectedFolder(String name, String payload, String requestId) {
     String saved = prefs.getString("backup_tree_uri", null);
     if (saved == null || saved.isEmpty()) return "No backup folder permission is saved.";
@@ -217,7 +310,13 @@ public class MainActivity extends BridgeActivity {
       writeDocument(published, bytes);
       if (!sha256(bytes).equals(sha256(readDocument(published)))) throw new IllegalStateException("Published backup failed SHA-256 read-back verification.");
       try { DocumentsContract.deleteDocument(getContentResolver(), stage); } catch (Exception ignored) { }
-      return null;
+      try {
+        pruneBackupFilesToRetention(root, published, 3);
+        return null;
+      } catch (Exception cleanupError) {
+        android.util.Log.e("AureliaBackup", "Backup is verified, but retention cleanup failed", cleanupError);
+        return "WARN:Backup saved and verified, but the three-backup retention cleanup could not finish. Existing backups were preserved.";
+      }
     } catch (Exception e) {
       if (published != null) try { DocumentsContract.deleteDocument(getContentResolver(), published); } catch (Exception ignored) { }
       if (stage != null) try { DocumentsContract.deleteDocument(getContentResolver(), stage); } catch (Exception ignored) { }
@@ -442,7 +541,8 @@ public class MainActivity extends BridgeActivity {
           } else {
             backupExecutor.execute(() -> {
               String error = writeToSelectedFolder(name, payload, requestId);
-              backupResult(requestId, error == null, error == null ? "" : error);
+              boolean saved = error == null || error.startsWith("WARN:");
+              backupResult(requestId, saved, error == null ? "" : error);
             });
           }
         } else if ("openUrl".equals(type)) {
