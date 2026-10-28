@@ -1060,7 +1060,7 @@ function loadAll(){
  if(!raw){LOCAL_STATE_STATUS='missing';return}
  try{
   const o=JSON.parse(raw);
-  if(!o||typeof o!=='object'||Array.isArray(o)||!Array.isArray(o.rooms)||!Array.isArray(o.b)||!Array.isArray(o.g)||!o.set||typeof o.set!=='object')throw new Error('Saved application state is incomplete');
+  if(!o||typeof o!=='object'||Array.isArray(o)||!Array.isArray(o.rooms)||!Array.isArray(o.b)||!Array.isArray(o.g)||!Array.isArray(o.t)||!Array.isArray(o.exp)||!Array.isArray(o.inv)||!Array.isArray(o.led)||!Array.isArray(o.aud)||!o.set||typeof o.set!=='object'||!o.menu||typeof o.menu!=='object')throw new Error('Saved application state is incomplete');
   [...DK,'bk','tab'].forEach(k=>{if(o[k]!==undefined)S[k]=o[k]});
   useMenu(S.menu);S.aud.forEach(a=>a.at=new Date(a.at));S.led.forEach(l=>l[3]=new Date(l[3]));id=Math.max(id,...S.b.map(b=>b.id));LOCAL_STATE_STATUS='valid';
  }catch(e){
