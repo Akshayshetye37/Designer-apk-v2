@@ -904,7 +904,12 @@ window.aureliaNativeRecoveryBackupResult=async(id,ok,payload,fileName)=>{
   validatePhotoArchive(raw.data,raw.photoArchive||{});
   S.rst={...raw.data,photoArchive:raw.photoArchive||{}};S.rstMode='snapshot';
   RECOVERY_CHECK_PENDING=false;
-  await restoreGo();
+  const restored=await restoreGo();
+  if(restored===false&&fileName&&!AUTO_RECOVERY_EXCLUDED.includes(fileName)&&AUTO_RECOVERY_EXCLUDED.length<20){
+   AUTO_RECOVERY_EXCLUDED.push(fileName);RECOVERY_CHECK_PENDING=true;
+   if(requestNextAutomaticRecovery()){toast('Restore failed for the newest backup. Trying an older recovery point.');return}
+   RECOVERY_CHECK_PENDING=false;
+  }
  }catch(e){
   console.error('Automatic backup recovery failed',e);
   if(fileName&&!AUTO_RECOVERY_EXCLUDED.includes(fileName)&&AUTO_RECOVERY_EXCLUDED.length<20){
@@ -1049,13 +1054,13 @@ async function restoreGo(){
   persist();
   const saved=JSON.parse((window.__aureliaStorage||localStorage).getItem(SK)||'null');
   if(!saved||DK.some(k=>JSON.stringify(saved[k])!==JSON.stringify(S[k])))throw new Error('Saved application state did not pass read-back verification.');
-  S.rst=null;S.rstMode=null;location.reload();
+  S.rst=null;S.rstMode=null;location.reload();return true;
  }catch(e){
   console.error('Transactional restore failed',e);
   try{if(oldPhotos)await photoRestore(oldPhotos)}catch(photoRollbackError){console.error('Photo rollback failed',photoRollbackError)}
   DK.forEach(k=>{if(liveBefore[k]!==undefined)S[k]=liveBefore[k]});id=oldId;
   try{persist()}catch(rollbackError){console.error('State rollback failed',rollbackError)}
-  toast('Restore failed and rollback was attempted. Do not clear app data; check the backup and device storage.');
+  toast('Restore failed and rollback was attempted. Do not clear app data; check the backup and device storage.');return false;
  }
 }
 const useMenu=m=>{Object.keys(MENU).forEach(k=>delete MENU[k]);Object.assign(MENU,m);S.menu=MENU};
