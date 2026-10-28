@@ -735,12 +735,9 @@ function bkDone(ok,err){if(ok&&BKB){S.bk.hash=BKB.h;S.bk.last=new Date().toISOSt
 function autoBackup(){if(S.bk.folder&&!BKB&&curHash()!==S.bk.hash)runBackup(true)}
 async async function pickDir(){
  const requestId='bf'+Date.now();
-  pendingBackupFolderRequestId=requestId;
- // Native Android must provide the Storage Access Framework folder picker and callback.
+ pendingBackupFolderRequestId=requestId;
  if(nat({type:'chooseDeviceBackupFolder',requestId}))return;
-  pendingBackupFolderRequestId=null;
-
- // showDirectoryPicker works only in supported secure browser contexts, not most WebViews.
+ pendingBackupFolderRequestId=null;
  if(typeof window.showDirectoryPicker==='function'){
   try{
    const handle=await window.showDirectoryPicker({mode:'readwrite'});
@@ -752,8 +749,6 @@ async async function pickDir(){
    console.warn('Directory selection failed:',e);
   }
  }
-
- // A plain HTML download is not a folder selection; don't label it as one.
  S.bk.folder=false;
  S.bk.label='Folder picker unavailable · use Save backup file';
  persist();render();
