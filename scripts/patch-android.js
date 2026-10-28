@@ -22,7 +22,7 @@ fs.writeFileSync(manifestPath, manifest);
 const javaDir = path.join(appDir, 'java', 'com', 'aurelia', 'pms');
 fs.mkdirSync(javaDir, { recursive: true });
 const javaPath = path.join(javaDir, 'MainActivity.java');
-const java = String.raw\`
+const java = String.raw`
 package com.aurelia.pms;
 
 import android.content.Intent;
@@ -150,6 +150,6 @@ public class MainActivity extends BridgeActivity {
     }
   }
 }
-\`;
+`;
 fs.writeFileSync(javaPath, java);
 console.log('Installed SAF folder picker, persistent folder access, backup writing, individual-file save picker, and manifest permissions.');
