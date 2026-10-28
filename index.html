@@ -1057,36 +1057,36 @@ function parseIdOcrText(raw){
   const candidate=lines.find(v=>v.length>=5&&v.length<=60&&!excluded.test(v)&&!relation.test(v)&&!/[0-9@]/.test(v)&&/^[\p{L}][\p{L} .'’-]+$/u.test(v)&&v.split(/\s+/).length>=2);
   if(candidate)name=cleanName(candidate);
  }
- let id='',checksumVerified=false;
+ let id='',checksumVerified=false,formatVerified=false;
  if(type==='Aadhaar (UIDAI)'){
   const candidates=compact.match(/(?:\d[\s-]*){12}/g)||[];
-  for(const candidate of candidates){const v=candidate.replace(/\D/g,'');if(v.length===12){if(!id)id=v;if(aadhaarVerhoeffValid(v)){id=v;checksumVerified=true;break}}}
+  for(const candidate of candidates){const v=candidate.replace(/\D/g,'');if(v.length===12){if(!id)id=v;formatVerified=true;if(aadhaarVerhoeffValid(v)){id=v;checksumVerified=true;break}}}
  }else if(type==='PAN card'){
   const candidates=compact.match(/[A-Z0-9]{10}/g)||[];
   id=candidates.find(v=>/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v))||'';
-  checksumVerified=!!id;
+  formatVerified=!!id;
  }else if(type==='Voter ID (EPIC)'){
   const voterLines=lines.filter(v=>/\b(?:EPIC|VOTER|IDENTITY CARD|ELECTOR|CARD NO|ID NO)\b/i.test(v));
   const source=(voterLines.join(' ')+' '+compact).toUpperCase();
   const candidates=source.match(/[A-Z]{2,4}[\s/-]?\d{6,8}|[A-Z0-9]{8,12}/g)||[];
   id=candidates.map(v=>v.replace(/[\s/-]/g,'')).find(v=>/^[A-Z]{2,4}\d{6,8}$/.test(v)&&!/^IN\d{6,8}$/.test(v))||'';
-  checksumVerified=!!id;
+  formatVerified=!!id;
  }else if(type==='Driving licence'){
   const candidates=compact.match(/[A-Z]{2}\s*[-/]?\s*\d{2}\s*[-/]?\s*(?:\d{4}\s*[-/]?\s*)?\d{6,11}/g)||[];
   id=candidates.map(v=>v.replace(/[\s/-]/g,'')).find(v=>/^[A-Z]{2}\d{12,16}$/.test(v))||'';
-  checksumVerified=!!id;
+  formatVerified=!!id;
  }else if(type==='Passport'){
   const compactLines=lines.map(v=>v.replace(/\s/g,'').toUpperCase());
   const line2=compactLines.find(v=>/^[A-Z0-9<]{35,44}$/.test(v)&&/[0-9]{6}[MF<][0-9]{6}/.test(v));
   if(line2){
    const candidate=line2.slice(0,9);
-   if(/^[A-Z0-9]{8,9}$/.test(candidate))id=candidate.replace(/</g,'');
+   if(/^[A-Z0-9]{8,9}$/.test(candidate)){id=candidate.replace(/</g,'');formatVerified=true;}
    if(line2.length>=44)checksumVerified=passportMrzCheckDigitValid(line2,0,9,9)&&passportMrzCheckDigitValid(line2,13,6,19)&&passportMrzCheckDigitValid(line2,21,6,27);
   }
-  if(!id){const candidates=compact.match(/\b[A-Z][A-Z0-9]{6,8}\b/g)||[];id=candidates.find(v=>/[A-Z]/.test(v)&&/\d/.test(v))||''}
+  if(!id){const candidates=compact.match(/\b[A-Z][A-Z0-9]{6,8}\b/g)||[];id=candidates.find(v=>/[A-Z]/.test(v)&&/\d/.test(v))||'';formatVerified=!!id}
  }else if(type==='UDID (Disability ID)'){
   const candidates=compact.match(/\b[A-Z0-9/-]{6,20}\b/g)||[];
-  id=candidates.find(v=>/\d/.test(v)&&!excluded.test(v))||'';
+  id=candidates.find(v=>/\d/.test(v)&&!excluded.test(v))||'';formatVerified=!!id;
  }else{
   const candidates=compact.match(/\b[A-Z0-9][A-Z0-9/-]{5,}\b/g)||[];
   id=candidates.find(v=>/\d/.test(v)&&!/^(\d{1,2}[-/]){2}\d{2,4}$/.test(v))||'';
