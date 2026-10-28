@@ -14,6 +14,9 @@ if (!manifest.includes('android.permission.INTERNET')) {
 if (!manifest.includes('android.permission.READ_EXTERNAL_STORAGE')) {
   manifest = manifest.replace(/<application\b/, '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <application');
 }
+if (!manifest.includes('android.permission.CAMERA')) {
+  manifest = manifest.replace(/<application\\b/, '    <uses-permission android:name="android.permission.CAMERA" />\\n    <application');
+}
 if (!manifest.includes('android.permission.WRITE_EXTERNAL_STORAGE')) {
   manifest = manifest.replace(/<application\b/, '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <application');
 }
@@ -46,6 +49,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import android.provider.DocumentsContract;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
@@ -57,6 +64,8 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends BridgeActivity {
   private static final int PICK_BACKUP_FOLDER = 7101;
   private static final int CREATE_BACKUP_FILE = 7102;
+  private static final int REQUEST_CAMERA_PERMISSION = 7103;
+  private String cameraPermissionRequestId = "";
   private String folderRequestId = "";
   private String pendingFileRequestId = "";
   private byte[] pendingBytes = new byte[0];
@@ -116,7 +125,16 @@ public class MainActivity extends BridgeActivity {
         JSONObject obj = new JSONObject(raw);
         String type = obj.optString("type", "");
         String requestId = obj.optString("requestId", "");
-        if ("chooseDeviceBackupFolder".equals(type)) {
+        if ("requestCameraPermission".equals(type)) {
+          runOnUiThread(() -> {
+            cameraPermissionRequestId = requestId;
+            if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+              js("window.aureliaCameraPermissionResult && window.aureliaCameraPermissionResult(" + q(requestId) + ",true)");
+            } else {
+              ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+            }
+          });
+        } else if ("chooseDeviceBackupFolder".equals(type)) {
           runOnUiThread(() -> {
             folderRequestId = requestId;
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
@@ -144,6 +162,14 @@ public class MainActivity extends BridgeActivity {
           runOnUiThread(() -> saveDocument(requestId, name, mime, bytes, false));
         }
       } catch (Exception ignored) { }
+    }
+  }
+
+  @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    if (requestCode == REQUEST_CAMERA_PERMISSION) {
+      boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+      js("window.aureliaCameraPermissionResult && window.aureliaCameraPermissionResult(" + q(cameraPermissionRequestId) + "," + granted + ")");
     }
   }
 
