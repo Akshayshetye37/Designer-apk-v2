@@ -2745,19 +2745,21 @@ function caReportRows(){
  const discounts=bookings.reduce((a,b)=>a+(Number(b.dc)||0),0);
  const expenses=(S.exp||[]).filter(e=>!e.v&&caInPeriod(e.date||e.at||new Date(),start,end));
  const expenseTotal=expenses.reduce((a,e)=>a+(Number(e.a)||0),0);
- const totalRevenue=revenueRooms+revenueDining+revenueExtras-discounts;
+ const cancellationRevenue=(S.financialLedger||[]).filter(e=>e.kind==='cancellation_settlement'||e.kind==='refund_paid_and_retention').filter(e=>caInPeriod(e.at,start,end)).reduce((sum,e)=>sum+(e.lines||[]).filter(l=>l.account==='Cancellation Revenue').reduce((v,l)=>v+(Number(l.credit)||0)-(Number(l.debit)||0),0),0);
+ const refundsPayable=(S.financialLedger||[]).reduce((sum,e)=>sum+(e.lines||[]).filter(l=>l.account==='Refunds Payable Liability').reduce((v,l)=>v+(Number(l.credit)||0)-(Number(l.debit)||0),0),0);
+ const totalRevenue=revenueRooms+revenueDining+revenueExtras-discounts+cancellationRevenue;
  const operatingProfit=totalRevenue-expenseTotal;
  const roomReceivables=allBookings.filter(b=>b.st!=='done').reduce((a,b)=>a+Math.max(0,Number(dueB(b))||0),0);
  const inventory=(S.inv||[]).reduce((a,x)=>a+Math.max(0,Number(x.q)||0)*Math.max(0,Number(x.u)||0),0);
  const cashReceived=allBookings.reduce((a,b)=>a+(b.pays||[]).reduce((z,p)=>z+(Number(p.a)||0),0),0)+(S.sales||[]).reduce((a,s)=>a+(Number(s.a)||0),0);
- const cancelledDeposits=(S.cancelled||[]).filter(b=>b.cancelledStatus==='refund_pending').reduce((a,b)=>a+(Number(b.p)||0),0);
+ const cancelledDeposits=refundsPayable;
  const assets=cashReceived+roomReceivables+inventory;
- return {start,end,revenueRooms,revenueDining,revenueExtras,discounts,totalRevenue,expenses:expenseTotal,operatingProfit,roomReceivables,inventory,cashReceived,cancelledDeposits,assets};
+ return {start,end,revenueRooms,revenueDining,revenueExtras,cancellationRevenue,discounts,totalRevenue,expenses:expenseTotal,operatingProfit,roomReceivables,inventory,cashReceived,cancelledDeposits,refundsPayable:cancelledDeposits,assets};
 }
 window.exportCAReport=async function(kind){
  const d=caReportRows(),rows=[['HARI OM RETREAT — MANAGEMENT ACCOUNTS'],['Report',kind==='pl'?'Profit and Loss Statement':'Balance Sheet / Statement of Financial Position'],['Period start',d.start||'All available dates'],['Period end',d.end||'Current'],['Currency',S.set.cur||'INR'],[],['Account','Amount']];
- if(kind==='pl')rows.push(['Room revenue',d.revenueRooms],['Dining revenue',d.revenueDining],['Other guest revenue',d.revenueExtras],['Less: discounts',-d.discounts],['Total revenue',d.totalRevenue],['Operating expenses',-d.expenses],['Net operating profit/(loss)',d.operatingProfit]);
- else rows.push(['ASSETS'],['Recorded collections (cash proxy; reconcile to cash/bank)',d.cashReceived],['Trade receivables / guest balances',d.roomReceivables],['Inventory at recorded unit cost',d.inventory],['Total provisional assets',d.assets],[],['LIABILITIES requiring ledger input'],['Refunds pending manual processing',d.cancelledDeposits],['Supplier payables / taxes / guest deposits','Not recorded in current app ledger'],[],['EQUITY'],['Balancing equity','Cannot be certified without opening balances and liabilities'],[],['Basis','Management estimate from app records; not a statutory or audited financial statement. Reconcile cash, bank, taxes, payables, depreciation, owner capital and opening balances with a Chartered Accountant.']);
+ if(kind==='pl')rows.push(['Room revenue',d.revenueRooms],['Dining revenue',d.revenueDining],['Other guest revenue',d.revenueExtras],['Cancellation revenue (retained fees)',d.cancellationRevenue],['Less: discounts',-d.discounts],['Total revenue',d.totalRevenue],['Operating expenses',-d.expenses],['Net operating profit/(loss)',d.operatingProfit]);
+ else rows.push(['ASSETS'],['Recorded collections (cash proxy; reconcile to cash/bank)',d.cashReceived],['Trade receivables / guest balances',d.roomReceivables],['Inventory at recorded unit cost',d.inventory],['Total provisional assets',d.assets],[],['LIABILITIES requiring ledger input'],['Refunds payable (pending refunds)',d.refundsPayable],['Supplier payables / taxes / guest deposits','Not recorded in current app ledger'],[],['EQUITY'],['Balancing equity','Cannot be certified without opening balances and liabilities'],[],['Basis','Management estimate from app records; not a statutory or audited financial statement. Reconcile cash, bank, taxes, payables, depreciation, owner capital and opening balances with a Chartered Accountant.']);
  const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n'),data='\uFEFF'+csv;
  const filename=kind==='pl'?'profit-and-loss-management-accounts.csv':'balance-sheet-management-schedule.csv';
  const blob=new Blob([data],{type:'text/csv;charset=utf-8'});
