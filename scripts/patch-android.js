@@ -277,13 +277,46 @@ public class MainActivity extends BridgeActivity {
         } else if ("photoRestore".equals(type)) {
           JSONObject archive = obj.optJSONObject("archive");
           if (archive == null) throw new IllegalArgumentException("Invalid photo archive");
-          java.util.Iterator<String> keys = archive.keys();
-          while (keys.hasNext()) {
-            String key = keys.next(), data = archive.optString(key, "");
-            if (!data.startsWith("data:image/")) throw new IllegalArgumentException("Invalid archived image");
-            writeText(photoFile(key), data);
+          java.util.LinkedHashMap<String, String> incoming = new java.util.LinkedHashMap<>();
+          java.util.LinkedHashMap<String, String> previous = new java.util.LinkedHashMap<>();
+          java.util.LinkedHashMap<String, java.io.File> staged = new java.util.LinkedHashMap<>();
+          java.io.File stageDir = new java.io.File(photoDir(), ".restore-" + System.currentTimeMillis());
+          if (!stageDir.mkdirs()) throw new IllegalStateException("Could not create photo restore staging area");
+          try {
+            java.util.Iterator<String> keys = archive.keys();
+            while (keys.hasNext()) {
+              String key = keys.next(), data = archive.optString(key, "");
+              if (key == null || !key.matches("[A-Za-z0-9_-]{1,120}") || !data.startsWith("data:image/")) throw new IllegalArgumentException("Invalid archived image or photo key");
+              incoming.put(key, data);
+              java.io.File target = photoFile(key);
+              previous.put(key, target.isFile() ? readText(target) : null);
+              java.io.File temp = new java.io.File(stageDir, key + ".txt");
+              writeText(temp, data);
+              if (!data.equals(readText(temp))) throw new IllegalStateException("Staged photo verification failed for " + key);
+              staged.put(key, temp);
+            }
+            for (java.util.Map.Entry<String, java.io.File> entry : staged.entrySet()) {
+              String data = readText(entry.getValue());
+              writeText(photoFile(entry.getKey()), data);
+              if (!data.equals(readText(photoFile(entry.getKey())))) throw new IllegalStateException("Restored photo verification failed for " + entry.getKey());
+            }
+            photoResult(requestId, true, "restored");
+          } catch (Exception restoreError) {
+            Exception rollbackError = null;
+            for (java.util.Map.Entry<String, String> entry : previous.entrySet()) {
+              try {
+                java.io.File target = photoFile(entry.getKey());
+                if (entry.getValue() == null) { if (target.exists() && !target.delete()) throw new IllegalStateException("Could not remove partially restored photo " + entry.getKey()); }
+                else writeText(target, entry.getValue());
+              } catch (Exception e) { rollbackError = e; }
+            }
+            if (rollbackError != null) throw new IllegalStateException("Photo restore failed and rollback was incomplete: " + rollbackError.getMessage(), restoreError);
+            throw restoreError;
+          } finally {
+            java.io.File[] stagedFiles = stageDir.listFiles();
+            if (stagedFiles != null) for (java.io.File stagedFile : stagedFiles) try { stagedFile.delete(); } catch (Exception ignored) { }
+            try { stageDir.delete(); } catch (Exception ignored) { }
           }
-          photoResult(requestId, true, "restored");
         } else if ("requestCameraPermission".equals(type)) {
           runOnUiThread(() -> {
             cameraPermissionRequestId = requestId;
