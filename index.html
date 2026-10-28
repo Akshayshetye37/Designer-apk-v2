@@ -1031,7 +1031,7 @@ function parseIdOcrText(raw){
  const excluded=/GOVERNMENT|REPUBLIC|AUTHORITY|IDENTITY|NATIONAL|PASSPORT|DRIVING|LICEN[CS]E|DATE OF BIRTH|\bDOB\b|\bMALE\b|\bFEMALE\b|ADDRESS|INDIA|INDIAN|SIGNATURE|NRC CARD|REGISTRATION CARD|ELECTION COMMISSION|INCOME TAX|UNIQUE IDENTIFICATION|ELECTOR PHOTO|VOTER ID|PERMANENT ACCOUNT|AADHAAR|UIDAI|RATION CARD|DATE OF ISSUE|VALIDITY|BLOOD GROUP|ORGAN DONOR/i;
  const relation=/^(?:father(?:'s)? name|mother(?:'s)? name|husband(?:'s)? name|wife(?:'s)? name|guardian(?:'s)? name|relative(?:'s)? name|पिता का नाम|पति का नाम|মাতার নাম|পিতার নাম)\b/i;
  const label=/^(?:(?:elector(?:'s)?|card ?holder(?:'s)?|applicant(?:'s)?|full|holder(?:'s)?|individual(?:'s)?|candidate(?:'s)?)\s+)?(?:full\s*)?name(?:\s+of\s+(?:the\s+)?(?:holder|elector|applicant))?|elector(?:'s)?\s+name|card ?holder(?:'s)?\s+name|applicant(?:'s)?\s+name|name\s+of\s+(?:the\s+)?(?:holder|elector|applicant)|given\s+names?|surname|family\s+name|forenames?|नाम|नामांकित व्यक्ति/i;
- const cleanName=v=>String(v||'').replace(/^[\s:;#.,-]+|[\s:;#.,-]+$/g,'').replace(/[^\\p{L} .'’-]/gu,' ').replace(/\s+/g,' ').trim();
+ const cleanName=v=>String(v||'').replace(/^[\s:;#.,-]+|[\s:;#.,-]+$/g,'').replace(/[^\p{L} .'’-]/gu,' ').replace(/\s+/g,' ').trim();
  const names=[];
  for(let i=0;i<lines.length;i++){
   const line=lines[i];
