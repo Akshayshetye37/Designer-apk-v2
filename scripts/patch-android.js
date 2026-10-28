@@ -91,7 +91,11 @@ import android.webkit.JavascriptInterface;
 import org.json.JSONObject;
 import com.getcapacitor.BridgeActivity;
 import java.io.OutputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends BridgeActivity {
   private static final int PICK_BACKUP_FOLDER = 7101;
@@ -103,6 +107,7 @@ public class MainActivity extends BridgeActivity {
   private byte[] pendingBytes = new byte[0];
   private boolean pendingIsBackup = false;
   private SharedPreferences prefs;
+  private final ExecutorService backupExecutor = Executors.newSingleThreadExecutor();
 
   @Override public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -123,21 +128,51 @@ public class MainActivity extends BridgeActivity {
     js("window.aureliaNativeDeviceBackupResult && window.aureliaNativeDeviceBackupResult(" + q(id) + "," + ok + "," + q(error) + ")");
   }
 
-  private boolean writeToSelectedFolder(String name, String payload) {
+  private static String sha256(byte[] bytes) throws Exception {
+    byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+    StringBuilder out = new StringBuilder();
+    for (byte b : digest) out.append(String.format(java.util.Locale.ROOT, "%02x", b & 0xff));
+    return out.toString();
+  }
+  private byte[] readDocument(Uri uri) throws Exception {
+    try (InputStream in = getContentResolver().openInputStream(uri);
+         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+      if (in == null) throw new IllegalStateException("Could not read saved backup for verification");
+      byte[] buffer = new byte[16384]; int count;
+      while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+      return out.toByteArray();
+    }
+  }
+  private void writeDocument(Uri uri, byte[] bytes) throws Exception {
+    try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
+      if (out == null) throw new IllegalStateException("Could not open backup destination");
+      out.write(bytes); out.flush();
+    }
+  }
+  private String writeToSelectedFolder(String name, String payload, String requestId) {
     String saved = prefs.getString("backup_tree_uri", null);
-    if (saved == null || saved.isEmpty()) return false;
+    if (saved == null || saved.isEmpty()) return "No backup folder permission is saved.";
     Uri tree = Uri.parse(saved);
     Uri root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+    byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
+    Uri stage = null, published = null;
+    String stageName = "." + name + ".staging-" + requestId.replaceAll("[^A-Za-z0-9_-]", "");
     try {
-      Uri file = DocumentsContract.createDocument(getContentResolver(), root, "application/json", name);
-      if (file == null) return false;
-      try (OutputStream out = getContentResolver().openOutputStream(file, "wt")) {
-        if (out == null) return false;
-        out.write(payload.getBytes(StandardCharsets.UTF_8));
-        out.flush();
-        return true;
-      }
-    } catch (Exception e) { return false; }
+      stage = DocumentsContract.createDocument(getContentResolver(), root, "application/json", stageName);
+      if (stage == null) throw new IllegalStateException("Could not create staging backup in the selected folder.");
+      writeDocument(stage, bytes);
+      if (!sha256(bytes).equals(sha256(readDocument(stage)))) throw new IllegalStateException("Staging backup failed SHA-256 read-back verification.");
+      published = DocumentsContract.createDocument(getContentResolver(), root, "application/json", name);
+      if (published == null) throw new IllegalStateException("Could not publish the verified backup.");
+      writeDocument(published, bytes);
+      if (!sha256(bytes).equals(sha256(readDocument(published)))) throw new IllegalStateException("Published backup failed SHA-256 read-back verification.");
+      try { DocumentsContract.deleteDocument(getContentResolver(), stage); } catch (Exception ignored) { }
+      return null;
+    } catch (Exception e) {
+      if (published != null) try { DocumentsContract.deleteDocument(getContentResolver(), published); } catch (Exception ignored) { }
+      if (stage != null) try { DocumentsContract.deleteDocument(getContentResolver(), stage); } catch (Exception ignored) { }
+      return e.getMessage() == null ? "Backup write or verification failed." : e.getMessage();
+    }
   }
   private void saveDocument(String id, String name, String mime, byte[] bytes, boolean isBackup) {
     pendingFileRequestId = id == null ? "" : id;
@@ -291,16 +326,17 @@ public class MainActivity extends BridgeActivity {
           boolean selected = !prefs.getString("backup_tree_uri", "").isEmpty();
           js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + "," + selected + ")");
         } else if ("backupDeviceNow".equals(type)) {
-          String name = obj.optString("name", "aurelia-backup.json");
-          String payload = obj.optString("payload", "");
-          runOnUiThread(() -> {
-            if (prefs.getString("backup_tree_uri", "").isEmpty()) {
-              saveDocument(requestId, name, "application/json", payload.getBytes(StandardCharsets.UTF_8), true);
-            } else {
-              boolean ok = writeToSelectedFolder(name, payload);
-              backupResult(requestId, ok, ok ? "" : "Could not write backup to selected folder.");
-            }
-          });
+          final String name = obj.optString("name", "aurelia-backup.json");
+          final String payload = obj.optString("payload", "");
+          final String folderUri = prefs.getString("backup_tree_uri", "");
+          if (folderUri.isEmpty()) {
+            runOnUiThread(() -> saveDocument(requestId, name, "application/json", payload.getBytes(StandardCharsets.UTF_8), true));
+          } else {
+            backupExecutor.execute(() -> {
+              String error = writeToSelectedFolder(name, payload, requestId);
+              backupResult(requestId, error == null, error == null ? "" : error);
+            });
+          }
         } else if ("openUrl".equals(type)) {
           String url = obj.optString("url", "");
           runOnUiThread(() -> { try { Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url)); startActivity(intent); } catch (Exception e) { js("window.aureliaNativeActionResult && window.aureliaNativeActionResult(" + q(requestId) + ",false," + q("Could not open link") + ")"); } });
@@ -349,10 +385,11 @@ public class MainActivity extends BridgeActivity {
       } else folderResult(folderRequestId, false, "No folder selected");
     } else if (requestCode == CREATE_BACKUP_FILE) {
       if (resultCode == RESULT_OK && data != null && data.getData() != null) {
-        try (OutputStream out = getContentResolver().openOutputStream(data.getData(), "wt")) {
-          if (out == null) throw new IllegalStateException("Could not open selected file");
-          out.write(pendingBytes);
-          out.flush();
+        try {
+          Uri destination = data.getData();
+          byte[] expected = pendingBytes;
+          writeDocument(destination, expected);
+          if (pendingIsBackup && !sha256(expected).equals(sha256(readDocument(destination)))) throw new IllegalStateException("Saved backup failed SHA-256 read-back verification.");
           if (pendingIsBackup) backupResult(pendingFileRequestId, true, "");
           else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",true,'')");
         } catch (Exception e) {
