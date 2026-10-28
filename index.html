@@ -788,10 +788,10 @@ async function createBackupSnapshot(){
 }
 async function runBackup(auto){
  if(BKB)return;
- if(S.bk.hash===curHash()){if(!auto)toast('Everything is already backed up');return}
+ if(S.bk.verified&&S.bk.hash===curHash()){if(!auto)toast('Everything is already backed up');return}
  try{
   const snap=await createBackupSnapshot();
-  if(S.bk.hash===snap.dataHash){if(!auto)toast('Everything is already backed up');return}
+  if(S.bk.verified&&S.bk.hash===snap.dataHash){if(!auto)toast('Everything is already backed up');return}
   const requestId='bk'+Date.now();BKB={h:snap.dataHash,nm:snap.name,payload:snap.payload,requestId};
   if(nat({type:'backupDeviceNow',requestId,name:snap.name,payload:snap.payload}))return;
   const saveToDir=window.BKDIR;
@@ -815,7 +815,7 @@ async function runBackup(auto){
   if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render();
  }catch(e){console.error('Backup snapshot failed',e);BKB=null;toast('Backup cancelled: '+(e&&e.message?e.message:'snapshot could not be verified'))}
 }
-function bkDone(ok,err){if(ok&&BKB){S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast('Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
+function bkDone(ok,err){if(ok&&BKB){S.bk.verified=true;S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast('Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
 function autoBackup(){if(S.bk.folder&&!BKB&&curHash()!==S.bk.hash)runBackup(true)}
 async function pickDir(){
  const requestId='bf'+Date.now();
@@ -826,7 +826,7 @@ async function pickDir(){
   try{
    const handle=await window.showDirectoryPicker({mode:'readwrite'});
    window.BKDIR=handle;
-   S.bk.folder=true;S.bk.label=handle.name||'Selected folder';
+   S.bk.folder=true;S.bk.verified=false;S.bk.label=handle.name||'Selected folder';
    persist();render();toast('Backup folder selected');autoBackup();return;
   }catch(e){
    if(e&&e.name==='AbortError')return;
@@ -843,6 +843,7 @@ window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{
  if(!pendingBackupFolderRequestId||String(id)!==String(pendingBackupFolderRequestId))return;
  pendingBackupFolderRequestId=null;
  S.bk.folder=!!ok;
+ if(ok)S.bk.verified=false;
  S.bk.label=msg||'';
  if(!ok){
   persist();render();
