@@ -898,9 +898,11 @@ window.aureliaNativeRecoveryBackupResult=async(id,ok,payload,fileName)=>{
  try{
   const raw=JSON.parse(payload);
   if(!raw||raw.v!==4||!raw.data||!Array.isArray(raw.data.rooms)||!Array.isArray(raw.data.b)||!raw.data.set)throw new Error('Backup snapshot structure is invalid.');
-  if(!raw.integrity||raw.integrity.algorithm!=='SHA-256'||typeof raw.integrity.digest!=='string')throw new Error('Backup has no supported integrity checksum.');
-  const copy={...raw};delete copy.integrity;
-  if(await sha256Hex(JSON.stringify(copy))!==raw.integrity.digest)throw new Error('Backup checksum does not match its contents.');
+  if(raw.integrity){
+   if(raw.integrity.algorithm!=='SHA-256'||typeof raw.integrity.digest!=='string')throw new Error('Backup has an unsupported integrity checksum.');
+   const copy={...raw};delete copy.integrity;
+   if(await sha256Hex(JSON.stringify(copy))!==raw.integrity.digest)throw new Error('Backup checksum does not match its contents.');
+  }else console.warn('Recovering a legacy version-4 backup without an embedded checksum; structural and photo validation will be used.');
   validatePhotoArchive(raw.data,raw.photoArchive||{});
   S.rst={...raw.data,photoArchive:raw.photoArchive||{}};S.rstMode='snapshot';
   RECOVERY_CHECK_PENDING=false;
