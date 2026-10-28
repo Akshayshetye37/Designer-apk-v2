@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - safe-fixes/backup-accounting-android
+      - fix/p0-backup-recovery
     paths:
       - 'index.html'
       - 'package.json'
