@@ -251,11 +251,12 @@ public class MainActivity extends BridgeActivity {
 
   private class AureliaBridge {
     @JavascriptInterface public void postMessage(String raw) {
-      String type = "", requestId = "";
+      String operationType = "", operationRequestId = "";
       try {
         JSONObject obj = new JSONObject(raw);
-        type = obj.optString("type", "");
-        requestId = obj.optString("requestId", "");
+        final String type = obj.optString("type", "");
+        final String requestId = obj.optString("requestId", "");
+        operationType = type; operationRequestId = requestId;
         if ("photoStore".equals(type)) {
           String key = obj.optString("key", "");
           String data = obj.optString("data", "");
@@ -394,9 +395,9 @@ public class MainActivity extends BridgeActivity {
         }
       } catch (Exception error) {
         String message = error.getMessage() == null ? "Native backup operation failed." : error.getMessage();
-        if ("photoStore".equals(type) || "photoLoad".equals(type) || "photoArchive".equals(type) || "photoRestore".equals(type)) photoResult(requestId, false, message);
-        else if ("backupDeviceNow".equals(type)) backupResult(requestId, false, message);
-        else if ("deviceBackupStatus".equals(type)) js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + ",false)");
+        if ("photoStore".equals(operationType) || "photoLoad".equals(operationType) || "photoArchive".equals(operationType) || "photoRestore".equals(operationType)) photoResult(operationRequestId, false, message);
+        else if ("backupDeviceNow".equals(operationType)) backupResult(operationRequestId, false, message);
+        else if ("deviceBackupStatus".equals(operationType)) js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(operationRequestId) + ",false)");
       }
     }
   }
