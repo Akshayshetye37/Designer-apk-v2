@@ -27,7 +27,7 @@ const { execFileSync } = require('child_process');
 const iconSvg = path.join(__dirname, '..', 'assets', 'aurelia-icon.svg');
 const resDir = path.join(appDir, 'res');
 const providerBlock = `if (!manifest.includes('androidx.core.content.FileProvider')) {
-  manifest = manifest.replace(/<\\/application>/, '    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/aurelia_file_paths" /></provider></application>');
+  manifest = manifest.replace('</application>', '    <provider android:name="androidx.core.content.FileProvider" android:authorities="\\${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/aurelia_file_paths" /></provider></application>');
 }
 fs.mkdirSync(path.join(resDir, 'xml'), { recursive: true });
 fs.writeFileSync(path.join(resDir, 'xml', 'aurelia_file_paths.xml'), '<?xml version="1.0" encoding="utf-8"?><paths xmlns:android="http://schemas.android.com/apk/res/android"><cache-path name="shared" path="shared/" /></paths>');
