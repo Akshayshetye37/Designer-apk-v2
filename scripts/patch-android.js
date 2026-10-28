@@ -80,6 +80,7 @@ import android.content.pm.PackageManager;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.provider.DocumentsContract;
+import android.database.Cursor;
 import android.util.Base64;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -126,6 +127,34 @@ public class MainActivity extends BridgeActivity {
   }
   private void backupResult(String id, boolean ok, String error) {
     js("window.aureliaNativeDeviceBackupResult && window.aureliaNativeDeviceBackupResult(" + q(id) + "," + ok + "," + q(error) + ")");
+  }
+  private void recoveryResult(String id, boolean ok, String payload) {
+    js("window.aureliaNativeRecoveryBackupResult && window.aureliaNativeRecoveryBackupResult(" + q(id) + "," + ok + "," + q(payload) + ")");
+  }
+  private String readLatestBackupFromSelectedFolder() throws Exception {
+    String saved = prefs.getString("backup_tree_uri", "");
+    if (saved.isEmpty()) throw new IllegalStateException("No backup folder is selected.");
+    Uri tree = Uri.parse(saved);
+    Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+    String[] projection = { DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_LAST_MODIFIED };
+    Uri latest = null; long latestModified = Long.MIN_VALUE;
+    try (Cursor cursor = getContentResolver().query(children, projection, null, null, null)) {
+      if (cursor == null) throw new IllegalStateException("The selected backup folder cannot be read.");
+      int idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
+      int nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+      int modifiedCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
+      while (cursor.moveToNext()) {
+        String name = cursor.getString(nameCol);
+        if (name == null || !name.startsWith("aurelia-backup-") || !name.endsWith(".json")) continue;
+        long modified = modifiedCol >= 0 && !cursor.isNull(modifiedCol) ? cursor.getLong(modifiedCol) : 0L;
+        if (latest == null || modified > latestModified) {
+          latestModified = modified;
+          latest = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(idCol));
+        }
+      }
+    }
+    if (latest == null) throw new IllegalStateException("No Aurelia backup file was found in the selected folder.");
+    return new String(readDocument(latest), StandardCharsets.UTF_8);
   }
 
   private static String sha256(byte[] bytes) throws Exception {
@@ -370,6 +399,11 @@ public class MainActivity extends BridgeActivity {
         } else if ("deviceBackupStatus".equals(type)) {
           boolean selected = !prefs.getString("backup_tree_uri", "").isEmpty();
           js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + "," + selected + ")");
+        } else if ("recoverLatestBackup".equals(type)) {
+          backupExecutor.execute(() -> {
+            try { recoveryResult(requestId, true, readLatestBackupFromSelectedFolder()); }
+            catch (Exception e) { recoveryResult(requestId, false, e.getMessage() == null ? "Could not read a backup from the selected folder." : e.getMessage()); }
+          });
         } else if ("backupDeviceNow".equals(type)) {
           final String name = obj.optString("name", "aurelia-backup.json");
           final String payload = obj.optString("payload", "");
@@ -407,6 +441,7 @@ public class MainActivity extends BridgeActivity {
         String message = error.getMessage() == null ? "Native backup operation failed." : error.getMessage();
         if ("photoStore".equals(operationType) || "photoLoad".equals(operationType) || "photoArchive".equals(operationType) || "photoRestore".equals(operationType)) photoResult(operationRequestId, false, message);
         else if ("backupDeviceNow".equals(operationType)) backupResult(operationRequestId, false, message);
+        else if ("recoverLatestBackup".equals(operationType)) recoveryResult(operationRequestId, false, message);
         else if ("deviceBackupStatus".equals(operationType)) js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(operationRequestId) + ",false)");
       }
     }
