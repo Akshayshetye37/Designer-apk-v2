@@ -522,9 +522,9 @@ function photoDb(){return new Promise((resolve,reject)=>{const q=indexedDB.open(
 async function photoPut(key,data){const db=await photoDb();return new Promise((resolve,reject)=>{const tx=db.transaction('originals','readwrite');tx.objectStore('originals').put(data,key);tx.oncomplete=()=>{db.close();resolve(true)};tx.onerror=()=>{db.close();reject(tx.error||new Error('Could not store original photo'))}})}
 async function photoGet(key){if(!key)return null;try{const db=await photoDb();return await new Promise((resolve,reject)=>{const q=db.transaction('originals').objectStore('originals').get(key);q.onsuccess=()=>{db.close();resolve(q.result||null)};q.onerror=()=>{db.close();reject(q.error)}})}catch(e){return null}}
 async function photoArchive(){const db=await photoDb();return new Promise((resolve,reject)=>{const tx=db.transaction('originals','readonly'),q=tx.objectStore('originals').getAllKeys(),v=tx.objectStore('originals').getAll();tx.oncomplete=()=>{const out={};q.result.forEach((k,i)=>out[k]=v.result[i]);db.close();resolve(out)};tx.onerror=()=>{db.close();reject(tx.error||new Error('Could not prepare photo archive'))}})}
-async function photoRestore(archive){if(!archive||typeof archive!=='object')return;const db=await photoDb();await new Promise((resolve,reject)=>{const tx=db.transaction('originals','readwrite'),st=tx.objectStore('originals');Object.keys(archive).forEach(k=>st.put(archive[k],k));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Could not restore original photos'))});db.close()}
+async function photoRestore(archive){if(!archive||typeof archive!=='object'||Array.isArray(archive))throw new Error('Backup photo archive is invalid');const entries=Object.entries(archive);for(const [k,v] of entries){if(!k||typeof v!=='string'||!/^data:image\//i.test(v))throw new Error('Photo archive contains an invalid original image')}const db=await photoDb();try{await new Promise((resolve,reject)=>{const tx=db.transaction('originals','readwrite'),st=tx.objectStore('originals');entries.forEach(([k,v])=>st.put(v,k));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Could not restore original photos'));tx.onabort=()=>reject(tx.error||new Error('Photo restore was cancelled'))})}finally{db.close()}return entries.length}
 function openOriginalPhoto(key,label){photoGet(key).then(data=>{if(!data){toast('Original photo is not on this device. Restore a backup containing the photo archive.');return}openS('<h2 class="foil">'+esc(label||'Original ID photo')+'</h2><img src="'+data+'" alt="Original ID photo" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><p class="lab">Full-resolution original loaded on demand from the private photo archive.</p><button class="btn ghost" onclick="closeS()">Close</button>')}).catch(()=>toast('Could not load the original photo'))}
-const shrink=(f,cb)=>{if(!f)return;const r=new FileReader();r.onload=()=>{const original=String(r.result||'');const im=new Image();im.onload=()=>{const k=Math.min(1,360/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));c.getContext('2d').drawImage(im,0,0,c.width,c.height);const thumb=c.toDataURL('image/jpeg',.48);const key='photo-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);photoPut(key,original).then(()=>cb(thumb,key)).catch(e=>{console.error(e);cb(thumb,'')})};im.onerror=()=>cb(original,'');im.src=original};r.onerror=()=>toast('Could not read this photo');r.readAsDataURL(f)};
+const shrink=(f,cb)=>{if(!f)return;const r=new FileReader();r.onload=()=>{const original=String(r.result||'');if(!/^data:image\//i.test(original)){toast('This file is not a readable image');return}const im=new Image();im.onload=()=>{try{const k=Math.min(1,360/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));const ctx=c.getContext('2d');if(!ctx)throw new Error('Thumbnail canvas unavailable');ctx.drawImage(im,0,0,c.width,c.height);const thumb=c.toDataURL('image/jpeg',.48);const key='photo-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);photoPut(key,original).then(()=>cb(thumb,key)).catch(e=>{console.error(e);toast('Original photo could not be stored. Check device storage and try again.')})}catch(e){console.error(e);toast('Could not create a photo thumbnail. Try another image.')}};im.onerror=()=>toast('Could not decode this photo. Try another image');im.src=original};r.onerror=()=>toast('Could not read this photo');r.readAsDataURL(f)};
 const DEMO_IMG='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect width="200" height="120" fill="#12301f"/><text x="100" y="66" fill="#d9b76e" font-size="14" text-anchor="middle">Sample ID</text></svg>');
 const IDT=['NRC','Passport','Driving licence','Aadhaar','PAN','Voter ID'],PM=['Cash','MTN MoMo','Airtel Money','Zamtel','UPI','Card','Bank transfer'];
 Object.assign(S,{sig:[],sales:[],inN:0,day:day0(),mm:false,menu:MENU,bk:{folder:false,label:'',last:null,hash:'',hist:[]},au:{release:true,noshow:true,reconcile:true,checkin:false,checkout:false,backup:true,hrs:60}});
@@ -639,12 +639,15 @@ function resetAll(){try{(window.__aureliaStorage||localStorage).removeItem(SK)}c
 /* backup engine */
 const DK=['rooms','b','t','today','hist','g','exp','inv','led','aud','fe','set','terms','sig','sales','au','inN','menu','day','cancelled','tableGuests','tableRooms','restaurant','financialLedger'],SK='aurelia_lodge_v2',hashS=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(h*33^s.charCodeAt(i))>>>0;return h.toString(36)};let BKB=null;
 const curHash=()=>hashS(JSON.stringify(DK.map(k=>S[k])));
+function photoKeysIn(value,out=new Set(),seen=new Set()){if(!value||typeof value!=='object'||seen.has(value))return out;seen.add(value);if(!Array.isArray(value)&&typeof value.imgKey==='string'&&value.imgKey)out.add(value.imgKey);for(const v of Object.values(value))photoKeysIn(v,out,seen);return out}
+function validatePhotoArchive(data,archive){const keys=photoKeysIn(data),missing=[];if(!archive||typeof archive!=='object'||Array.isArray(archive))archive={};for(const key of keys){if(typeof archive[key]!=='string'||!/^data:image\//i.test(archive[key]))missing.push(key)}if(missing.length)throw new Error(missing.length+' original ID photo(s) are missing from the archive. No backup/restore was completed.');return keys.size}
 async function runBackup(auto){
  if(BKB)return;
  const h=curHash();if(h===S.bk.hash){if(!auto)toast('Everything is already backed up');return}
  const nm='aurelia-backup-'+ymd(0)+'-'+h+'.json';
- let originals={};try{originals=await photoArchive()}catch(e){console.warn('Photo archive skipped',e)}
- const pl=JSON.stringify({v:3,hotel:S.set.name,at:new Date().toISOString(),data:Object.fromEntries(DK.map(k=>[k,S[k]])),photoArchive:originals},null,2);
+ let originals;try{originals=await photoArchive()}catch(e){console.error('Photo archive failed',e);toast('Backup cancelled: original ID photos could not be read. No backup was marked complete.');return}
+ try{const photoCount=validatePhotoArchive(Object.fromEntries(DK.map(k=>[k,S[k]])),originals);if(photoCount)console.info('Backup includes '+photoCount+' referenced original ID photo(s).')}catch(e){console.error(e);toast('Backup cancelled: '+e.message);return}
+ const pl=JSON.stringify({v:4,hotel:S.set.name,at:new Date().toISOString(),data:Object.fromEntries(DK.map(k=>[k,S[k]])),photoArchive:originals,photoArchiveCount:Object.keys(originals).length},null,2);
   const requestId='bk'+Date.now(); BKB={h,nm,payload:pl,requestId};
   if(nat({type:'backupDeviceNow',requestId,name:nm,payload:pl}))return;
  const saveToDir=window.BKDIR;
@@ -795,15 +798,17 @@ async function restoreGo(){
   toast('JSON import: '+roomsAdded+' rooms, '+ga+' guests, '+ba+' bookings, '+expensesAdded+' expenses, '+inventoryAdded+' stock items; '+sk+' invalid/duplicate rows skipped.'+(roomsCreatedForBooking?' Created '+roomsCreatedForBooking+' placeholder room(s); review their room type and rate.':''));
   return;
  }
- // Full Aurelia backup: validate core arrays before replacing the current state.
+ // Full Aurelia backup: validate state and all referenced original photos before changing live records.
  if(!Array.isArray(d.rooms)||!Array.isArray(d.b)){toast('Backup is missing the room or booking list. Current data was not changed.');return}
+ const sourceData=d,archive=d.photoArchive||{};
+ try{validatePhotoArchive(sourceData,archive)}catch(e){toast('Restore cancelled: '+e.message);return}
+ try{if(Object.keys(archive).length)await photoRestore(archive)}catch(e){console.error('Photo archive restore failed',e);toast('Restore cancelled: original photos could not be restored. Current guest and booking records were not changed.');return}
  const restored={...d,rooms:d.rooms,b:d.b,g:Array.isArray(d.g)?d.g:[],t:Array.isArray(d.t)?d.t:[],exp:Array.isArray(d.exp)?d.exp:[],inv:Array.isArray(d.inv)?d.inv:[],aud:Array.isArray(d.aud)?d.aud:[],hist:Array.isArray(d.hist)?d.hist:[0,0,0,0,0,0]};
  const validBookings=[],invalidBookings=[];
  restored.b.forEach(x=>{const b=normaliseImportedBooking(x);if(b)validBookings.push(b);else invalidBookings.push(x)});
  restored.b=validBookings;
  DK.forEach(k=>{if(restored[k]!==undefined)S[k]=restored[k]});
  ['rooms','b','g','t','exp','inv','aud'].forEach(k=>{if(!Array.isArray(S[k]))S[k]=[]});
- if(d.photoArchive)try{await photoRestore(d.photoArchive)}catch(e){console.error('Photo archive restore failed',e);toast('Records restored, but some original photos could not be restored')}
  id=Math.max(id,0,...S.b.map(b=>+b.id||0));
  S.rst=null;S.rstMode=null;persist();location.reload();
 }
