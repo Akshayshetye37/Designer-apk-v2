@@ -20,18 +20,20 @@ if (!manifest.includes('android.permission.CAMERA')) {
 if (!manifest.includes('android.permission.WRITE_EXTERNAL_STORAGE')) {
   manifest = manifest.replace(/<application\b/, '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <application');
 }
-if (!manifest.includes('androidx.core.content.FileProvider')) {
-  manifest = manifest.replace(/<application\\b/, '<application');
-  manifest = manifest.replace(/<\\/application>/, '    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/aurelia_file_paths" /></provider>\\n</application>');
-}
-fs.mkdirSync(path.join(resDir, 'xml'), { recursive: true });
-fs.writeFileSync(path.join(resDir, 'xml', 'aurelia_file_paths.xml'), '<?xml version="1.0" encoding="utf-8"?><paths xmlns:android="http://schemas.android.com/apk/res/android"><cache-path name="shared" path="shared/" /></paths>');
 fs.writeFileSync(manifestPath, manifest);
 
 
 const { execFileSync } = require('child_process');
 const iconSvg = path.join(__dirname, '..', 'assets', 'aurelia-icon.svg');
 const resDir = path.join(appDir, 'res');
+const providerBlock = `if (!manifest.includes('androidx.core.content.FileProvider')) {
+  manifest = manifest.replace(/<\\/application>/, '    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/aurelia_file_paths" /></provider></application>');
+}
+fs.mkdirSync(path.join(resDir, 'xml'), { recursive: true });
+fs.writeFileSync(path.join(resDir, 'xml', 'aurelia_file_paths.xml'), '<?xml version="1.0" encoding="utf-8"?><paths xmlns:android="http://schemas.android.com/apk/res/android"><cache-path name="shared" path="shared/" /></paths>');
+`;
+eval(providerBlock);
+
 if (fs.existsSync(iconSvg)) {
   const densities = { 'mdpi':48, 'hdpi':72, 'xhdpi':96, 'xxhdpi':144, 'xxxhdpi':192 };
   for (const [density, size] of Object.entries(densities)) {
