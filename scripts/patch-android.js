@@ -57,7 +57,8 @@ if (fs.existsSync(appGradleGroovy)) {
     fs.writeFileSync(appGradleKts, gradle);
   }
 }
-\nconst javaPath = path.join(javaDir, 'MainActivity.java');
+
+const javaPath = path.join(javaDir, 'MainActivity.java');
 const java = String.raw`
 package com.aurelia.pms;
 
