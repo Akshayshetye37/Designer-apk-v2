@@ -131,7 +131,6 @@ public class MainActivity extends BridgeActivity {
       }
     } catch (Exception e) { return false; }
   }
-
   private void saveDocument(String id, String name, String mime, byte[] bytes, boolean isBackup) {
     pendingFileRequestId = id == null ? "" : id;
     pendingIsBackup = isBackup;
