@@ -971,7 +971,7 @@ dsave=function(){const draft=S.dr;if(draft?.k==='guest'){rdD();const name=draft.
 function dsaveProfileOnly(){rdD();const d=S.dr,g=d.g;g.n=g.n.trim();if(!g.n||!g.idn.trim()||!g.img){toast('Add the guest name, ID number and ID image');dsheet();return}const rec={...g,occ:d.oc,veh:d.vh};const ix=d.gi;if(ix==null)S.g.push(rec);else S.g[ix]=rec;aud('Guest profile saved','Not linked to a booking');closeS();render();toast('Guest profile saved; no room was booked')}
 function resvForGuest(name){const ix=S.g.findIndex(g=>g.n.toLowerCase()===name.toLowerCase());S.dr=newDraft('res');if(ix>=0){const g=S.g[ix];S.dr.g={n:g.n,ph:g.ph,em:g.em,idt:g.idt,idn:g.idn,img:g.img};S.dr.oc=JSON.parse(JSON.stringify(g.occ||[]));S.dr.vh=JSON.parse(JSON.stringify(g.veh||[]))}dsheet()}
 // Native OCR callback receives extracted fields; keep every value editable for staff verification.
-window.aureliaNativeOcrResult=(requestId,payload)=>{try{const d=typeof payload==='string'?JSON.parse(payload):payload,parsed=typeof parseIdOcrText==='function'?parseIdOcrText(d.text||''):{name:d.fullName||d.name||'',id:d.idNumber||d.id||'',text:d.text||''},name=parsed.name||d.fullName||d.name||'',id=parsed.id||d.idNumber||d.id||'',targets=window.__aureliaOcrTargets||{};if(targets[requestId]){const target=targets[requestId];delete targets[requestId];applyUploadedOcr(target,{name,id,type:d.docType&&d.docType!=='OTHER'?d.docType:parsed.type,text:d.text||''});return}const el=$('#ocr-result');window._ocrSuggestion={name,id};if(el)el.innerHTML='<div class="ln"><span>OCR engine</span><b>Google ML Kit (on-device)</b></div><div class="ln"><span>Proposed full name</span><b>'+esc(name||'Not detected')+'</b></div><div class="ln"><span>Proposed ID number</span><b>'+esc(id||'Not detected')+'</b></div><div style="white-space:pre-wrap">'+esc(d.text||'')+'</div><div class="row" style="margin-top:8px"><button class="btn sm" onclick="applyOcrFields(window._ocrSuggestion.name,window._ocrSuggestion.id)">Use suggested fields</button></div><div class="lab">Check the original ID before saving.</div>'}catch(e){const el=$('#ocr-result');if(el)el.textContent='Could not parse OCR result. Please try again.'}};function applyOcrFields(name,id){if($('#d1')&&name)$('#d1').value=name;if($('#d5')&&id)$('#d5').value=id;toast('Suggested fields filled; verify before saving')}
+window.aureliaNativeOcrResult=(requestId,payload)=>{try{const d=typeof payload==='string'?JSON.parse(payload):payload,parsed=typeof parseIdOcrText==='function'?parseIdOcrText(d.text||'',d.lines):{name:d.fullName||d.name||'',id:d.idNumber||d.id||'',text:d.text||''},name=parsed.name||d.fullName||d.name||'',id=parsed.id||d.idNumber||d.id||'',targets=window.__aureliaOcrTargets||{};if(targets[requestId]){const target=targets[requestId];delete targets[requestId];applyUploadedOcr(target,{name,id,type:d.docType&&d.docType!=='OTHER'?d.docType:parsed.type,text:d.text||'',lines:d.lines||[]});return}const el=$('#ocr-result');window._ocrSuggestion={name,id};if(el)el.innerHTML='<div class="ln"><span>OCR engine</span><b>Google ML Kit (on-device)</b></div><div class="ln"><span>Proposed full name</span><b>'+esc(name||'Not detected')+'</b></div><div class="ln"><span>Proposed ID number</span><b>'+esc(id||'Not detected')+'</b></div><div style="white-space:pre-wrap">'+esc(d.text||'')+'</div><div class="row" style="margin-top:8px"><button class="btn sm" onclick="applyOcrFields(window._ocrSuggestion.name,window._ocrSuggestion.id)">Use suggested fields</button></div><div class="lab">Check the original ID before saving.</div>'}catch(e){const el=$('#ocr-result');if(el)el.textContent='Could not parse OCR result. Please try again.'}};function applyOcrFields(name,id){if($('#d1')&&name)$('#d1').value=name;if($('#d5')&&id)$('#d5').value=id;toast('Suggested fields filled; verify before saving')}
 // More menu has explicit restaurant, dining bills, guests, and pending payment list.
 TL.unshift(['rest','Restaurant business','Separate billing, identity & sales','POS'],['guest-export','Guest / Room Export','PDF with ID photos & room booking','Guests']);
 SUB['guest-export']=()=>hd('Guest / Room Export')+`<div class="card"><h3>Export one booking</h3><div class="lab">A single guest and room record bundle. Includes stay details, all guest ID images, folio lines and payment totals. Store exports securely.</div><button class="btn" style="margin-top:12px" onclick="guestBookingExport()">Choose booking &amp; export</button></div>`;
@@ -1024,9 +1024,10 @@ function passportMrzCheckDigitValid(line,fieldStart,fieldLength,checkPos){
  const weights=[7,3,1],sum=values.reduce((a,v,i)=>a+v*weights[i%3],0);
  return sum%10===Number(digit);
 }
-function parseIdOcrText(raw){
+function parseIdOcrText(raw, spatialLines){
  const text=String(raw||'').replace(/\r/g,'');
- const lines=text.split('\n').map(v=>v.replace(/[|]/g,'I').replace(/[ \t]+/g,' ').trim()).filter(Boolean);
+ const structured=Array.isArray(spatialLines)?spatialLines.filter(v=>v&&typeof v.text==='string'&&v.text.trim()):[];
+ const lines=(structured.length?structured.map(v=>v.text):text.split('\n')).map(v=>v.replace(/[|]/g,'I').replace(/[ \t]+/g,' ').trim()).filter(Boolean);
  const joined=lines.join('\n'),type=detectIndianIdType(joined),compact=lines.join(' ').toUpperCase();
  const excluded=/GOVERNMENT|REPUBLIC|AUTHORITY|IDENTITY|NATIONAL|PASSPORT|DRIVING|LICEN[CS]E|DATE OF BIRTH|\bDOB\b|\bMALE\b|\bFEMALE\b|ADDRESS|INDIA|INDIAN|SIGNATURE|NRC CARD|REGISTRATION CARD|ELECTION COMMISSION|INCOME TAX|UNIQUE IDENTIFICATION|ELECTOR PHOTO|VOTER ID|PERMANENT ACCOUNT|AADHAAR|UIDAI|RATION CARD|DATE OF ISSUE|VALIDITY|BLOOD GROUP|ORGAN DONOR/i;
  const relation=/^(?:father(?:'s)? name|mother(?:'s)? name|husband(?:'s)? name|wife(?:'s)? name|guardian(?:'s)? name|relative(?:'s)? name|पिता का नाम|पति का नाम|মাতার নাম|পিতার নাম)\b/i;
@@ -1091,7 +1092,7 @@ function parseIdOcrText(raw){
   const candidates=compact.match(/\b[A-Z0-9][A-Z0-9/-]{5,}\b/g)||[];
   id=candidates.find(v=>/\d/.test(v)&&!/^(\d{1,2}[-/]){2}\d{2,4}$/.test(v))||'';
  }
- return {name,id,text:lines.join('\n'),type,checksumVerified,confidence:id?(checksumVerified?'high':'medium'):'low'};
+ return {name,id,text:lines.join('\n'),type,checksumVerified,formatVerified,confidence:id?(checksumVerified?'high':formatVerified?'medium':'low'):'low'};
 }
 
 async function ocrUploadedId(file,target){
@@ -1118,7 +1119,7 @@ function applyUploadedOcr(target,d){
  if(target==='main')destination=dr.g;
  else if(String(target).startsWith('occ:'))destination=dr.oc[Number(String(target).split(':')[1])];
  if(!destination){toast('Matching guest form is no longer open.');return}
- const parsed=parseIdOcrText(d.text||'');
+ const parsed=parseIdOcrText(d.text||'',d.lines);
  const name=String(d.name||d.fullName||parsed.name||'').replace(/\s+/g,' ').trim();
  const idNumber=String(d.id||d.idNumber||parsed.id||'').replace(/\s+/g,' ').trim();
  const detectedType=d.type||parsed.type||'';
