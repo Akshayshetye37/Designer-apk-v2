@@ -1,9 +1,21 @@
 name: Build Aurelia PMS APK
+# P0 backup recovery branch build
 
 on:
   push:
     branches:
       - safe-fixes/backup-accounting-android
+      - fix/p0-backup-recovery
+    paths:
+      - 'index.html'
+      - 'package.json'
+      - 'capacitor.config.json'
+      - 'scripts/**'
+      - 'assets/**'
+      - '.github/workflows/android-apk.yml'
+  pull_request:
+    branches:
+      - main
     paths:
       - 'index.html'
       - 'package.json'

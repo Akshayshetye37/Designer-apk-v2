@@ -592,12 +592,30 @@ async function photoArchive(){
  if(Object.keys(out).length||!window.indexedDB)return out;
  try{await photoDb();return out}catch(e){return out}
 }
-async function photoRestore(archive){if(!archive||typeof archive!=='object'||Array.isArray(archive))throw new Error('Backup photo archive is invalid');const entries=Object.entries(archive);for(const [k,v] of entries){if(!k||typeof v!=='string'||!/^data:image\//i.test(v))throw new Error('Photo archive contains an invalid original image')}
+async function photoRestore(archive){
+ if(!archive||typeof archive!=='object'||Array.isArray(archive))throw new Error('Backup photo archive is invalid');
+ const entries=Object.entries(archive);
+ for(const [k,v] of entries)if(!k||typeof v!=='string'||!/^data:image\//i.test(v))throw new Error('Photo archive contains an invalid original image');
  if(window.AureliaNative){await photoNative('photoRestore',{archive});return entries.length}
- try{const db=await photoDb();try{await new Promise((resolve,reject)=>{const tx=db.transaction('originals','readwrite'),st=tx.objectStore('originals');entries.forEach(([k,v])=>st.put(v,k));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Could not restore original photos'));tx.onabort=()=>reject(tx.error||new Error('Photo restore was cancelled'))})}finally{db.close()}}
- catch(e){for(const [k,v] of entries){try{localStorage.setItem(PHOTO_FALLBACK_PREFIX+k,v)}catch(_){PHOTO_MEMORY_FALLBACK.set(k,v)}}}
- return entries.length}
-
+ let db;
+ try{db=await photoDb()}catch(e){
+  const keep=new Set(entries.map(([k])=>PHOTO_FALLBACK_PREFIX+k));
+  try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith(PHOTO_FALLBACK_PREFIX)&&!keep.has(k))localStorage.removeItem(k)}}catch(_){}
+  PHOTO_MEMORY_FALLBACK.clear();
+  for(const [k,v] of entries){try{localStorage.setItem(PHOTO_FALLBACK_PREFIX+k,v)}catch(_){PHOTO_MEMORY_FALLBACK.set(k,v)}}
+  return entries.length;
+ }
+ try{
+  await new Promise((resolve,reject)=>{
+   const tx=db.transaction('originals','readwrite'),st=tx.objectStore('originals');
+   st.clear();entries.forEach(([k,v])=>st.put(v,k));
+   tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Could not restore original photos'));tx.onabort=()=>reject(tx.error||new Error('Photo restore was cancelled'));
+  });
+ }finally{db.close()}
+ try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith(PHOTO_FALLBACK_PREFIX))localStorage.removeItem(k)}}catch(_){}
+ PHOTO_MEMORY_FALLBACK.clear();
+ return entries.length;
+}
 function openOriginalPhoto(key,label){photoGet(key).then(data=>{if(!data){toast('Original photo is not on this device. Restore a backup containing the photo archive.');return}openS('<h2 class="foil">'+esc(label||'Original ID photo')+'</h2><img src="'+data+'" alt="Original ID photo" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><p class="lab">Full-resolution original loaded on demand from the private photo archive.</p><button class="btn ghost" onclick="closeS()">Close</button>')}).catch(()=>toast('Could not load the original photo'))}
 const shrink=(f,cb)=>{if(!f)return;const r=new FileReader();r.onload=()=>{const original=String(r.result||'');if(!/^data:image\//i.test(original)){toast('This file is not a readable image');return}const im=new Image();im.onload=()=>{try{const thumbScale=Math.min(1,360/Math.max(im.width,im.height)),tc=document.createElement('canvas');tc.width=Math.max(1,Math.round(im.width*thumbScale));tc.height=Math.max(1,Math.round(im.height*thumbScale));const tctx=tc.getContext('2d');if(!tctx)throw new Error('Thumbnail canvas unavailable');tctx.drawImage(im,0,0,tc.width,tc.height);const thumb=tc.toDataURL('image/jpeg',.48);const archiveScale=Math.min(1,2000/Math.max(im.width,im.height)),ac=document.createElement('canvas');ac.width=Math.max(1,Math.round(im.width*archiveScale));ac.height=Math.max(1,Math.round(im.height*archiveScale));const actx=ac.getContext('2d');if(!actx)throw new Error('Photo archive canvas unavailable');actx.drawImage(im,0,0,ac.width,ac.height);const archived=ac.toDataURL('image/jpeg',.82);const key='photo-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);photoPut(key,archived).then(()=>cb(thumb,key)).catch(e=>{console.error('Photo archive write failed',e);toast('Photo storage failed ('+(e&&e.name?e.name:'storage error')+'). Free device storage and try again.')})}catch(e){console.error(e);toast('Could not prepare this photo for storage. Try another image.')}};im.onerror=()=>toast('Could not decode this photo. Try another image');im.src=original};r.onerror=()=>toast('Could not read this photo');r.readAsDataURL(f)};
 const DEMO_IMG='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect width="200" height="120" fill="#12301f"/><text x="100" y="66" fill="#d9b76e" font-size="14" text-anchor="middle">Sample ID</text></svg>');
@@ -765,25 +783,79 @@ const DK=['rooms','b','t','today','hist','g','exp','inv','led','aud','fe','set',
 const curHash=()=>hashS(JSON.stringify(DK.map(k=>S[k])));
 function photoKeysIn(value,out=new Set(),seen=new Set()){if(!value||typeof value!=='object'||seen.has(value))return out;seen.add(value);if(!Array.isArray(value)&&typeof value.imgKey==='string'&&value.imgKey)out.add(value.imgKey);for(const v of Object.values(value))photoKeysIn(v,out,seen);return out}
 function validatePhotoArchive(data,archive){const keys=photoKeysIn(data),missing=[];if(!archive||typeof archive!=='object'||Array.isArray(archive))archive={};for(const key of keys){if(typeof archive[key]!=='string'||!/^data:image\//i.test(archive[key]))missing.push(key)}if(missing.length)throw new Error(missing.length+' original ID photo(s) are missing from the archive. No backup/restore was completed.');return keys.size}
+async function sha256Hex(text){
+ if(window.crypto&&crypto.subtle&&window.TextEncoder){const bytes=new TextEncoder().encode(text),digest=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')}
+ throw new Error('SHA-256 verification is unavailable in this WebView.');
+}
+const cloneSnapshot=()=>JSON.parse(JSON.stringify(Object.fromEntries(DK.map(k=>[k,S[k]]))));
+const cloneLiveSnapshot=()=>{const out={};DK.forEach(k=>{try{out[k]=typeof structuredClone==='function'?structuredClone(S[k]):JSON.parse(JSON.stringify(S[k]))}catch(e){out[k]=JSON.parse(JSON.stringify(S[k]))}});return out};
+async function createBackupSnapshot(){
+ const dataHash=curHash(),data=cloneSnapshot();
+ const originals=await photoArchive();
+ if(curHash()!==dataHash)throw new Error('Application data changed while the snapshot was being prepared. Try again.');
+ validatePhotoArchive(data,originals);
+ const snapshot={v:4,hotel:data.set?.name||S.set.name,at:new Date().toISOString(),data,photoArchive:originals,photoArchiveCount:Object.keys(originals).length};
+ const canonical=JSON.stringify(snapshot);
+ snapshot.integrity={algorithm:'SHA-256',digest:await sha256Hex(canonical)};
+ const payload=JSON.stringify(snapshot,null,2);
+ if(curHash()!==dataHash)throw new Error('Application data changed before the snapshot was committed. Try again.');
+ return {dataHash,payload,name:'aurelia-backup-'+ymd(0)+'-'+dataHash+'.json'};
+}
+async function pruneBrowserBackups(directoryHandle,protectedHandle,maximum=3){
+ const candidates=[];
+ for await(const [name,handle] of directoryHandle.entries()){
+  if(!/^aurelia-backup-.*\.json$/i.test(name)||handle.kind!=='file')continue;
+  try{
+   const file=await handle.getFile(),raw=JSON.parse(await file.text());
+   const data=raw&&raw.data;
+   let valid=!!(raw&&raw.v===4&&data&&Array.isArray(data.rooms)&&Array.isArray(data.b)&&data.set&&typeof data.set==='object');
+   if(valid&&raw.integrity){
+    valid=raw.integrity.algorithm==='SHA-256'&&/^[a-f0-9]{64}$/i.test(raw.integrity.digest||'');
+    if(valid){const copy={...raw};delete copy.integrity;valid=await sha256Hex(JSON.stringify(copy))===raw.integrity.digest}
+   }
+   candidates.push({name,handle,modified:file.lastModified||0,valid,protectedNew:handle.name===protectedHandle.name});
+  }catch(e){candidates.push({name,handle,modified:0,valid:false,protectedNew:handle.name===protectedHandle.name})}
+ }
+ candidates.sort((a,b)=>(Number(b.protectedNew)-Number(a.protectedNew))||(Number(b.valid)-Number(a.valid))||(b.modified-a.modified));
+ let retained=0;const failures=[];
+ for(const item of candidates){
+  if(item.valid&&retained<maximum){retained++;continue}
+  try{await directoryHandle.removeEntry(item.name)}catch(e){failures.push(item.name)}
+ }
+ if(failures.length)throw new Error('Could not remove obsolete backup file(s): '+failures.join(', '));
+}
 async function runBackup(auto){
  if(BKB)return;
- const h=curHash();if(h===S.bk.hash){if(!auto)toast('Everything is already backed up');return}
- const nm='aurelia-backup-'+ymd(0)+'-'+h+'.json';
- let originals;try{originals=await photoArchive()}catch(e){console.error('Photo archive failed',e);toast('Backup cancelled: original ID photos could not be read. No backup was marked complete.');return}
- try{const photoCount=validatePhotoArchive(Object.fromEntries(DK.map(k=>[k,S[k]])),originals);if(photoCount)console.info('Backup includes '+photoCount+' referenced original ID photo(s).')}catch(e){console.error(e);toast('Backup cancelled: '+e.message);return}
- const pl=JSON.stringify({v:4,hotel:S.set.name,at:new Date().toISOString(),data:Object.fromEntries(DK.map(k=>[k,S[k]])),photoArchive:originals,photoArchiveCount:Object.keys(originals).length},null,2);
-  const requestId='bk'+Date.now(); BKB={h,nm,payload:pl,requestId};
-  if(nat({type:'backupDeviceNow',requestId,name:nm,payload:pl}))return;
- const saveToDir=window.BKDIR;
- if(saveToDir){saveToDir.getFileHandle(nm,{create:true}).then(f=>f.createWritable()).then(w=>w.write(pl).then(()=>w.close())).then(()=>bkDone(true),e=>bkDone(false,String(e)));return}
- BKB=null;
- const blob=new Blob([pl],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
- a.href=url;a.download=nm;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
- S.bk.hash=h;S.bk.last=new Date().toISOString();S.bk.hist=S.bk.hist||[];S.bk.hist.unshift({n:nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);persist();
- toast('Backup downloaded. Save it in your chosen backup folder or Google Drive.');
- if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render();
+ if(S.bk.verified&&S.bk.hash===curHash()){if(!auto)toast('Everything is already backed up');return}
+ try{
+  const snap=await createBackupSnapshot();
+  if(S.bk.verified&&S.bk.hash===snap.dataHash){if(!auto)toast('Everything is already backed up');return}
+  const requestId='bk'+Date.now();BKB={h:snap.dataHash,nm:snap.name,payload:snap.payload,requestId};
+  if(nat({type:'backupDeviceNow',requestId,name:snap.name,payload:snap.payload}))return;
+  const saveToDir=window.BKDIR;
+  if(saveToDir){
+   const stagingName='.'+snap.name+'.staging-'+requestId;
+   try{
+    const stage=await saveToDir.getFileHandle(stagingName,{create:true}),w=await stage.createWritable();
+    await w.write(snap.payload);await w.close();
+    if(await (await stage.getFile()).text()!==snap.payload)throw new Error('Staged backup read-back verification failed');
+    const final=await saveToDir.getFileHandle(snap.name,{create:true}),fw=await final.createWritable();
+    await fw.write(snap.payload);await fw.close();
+    if(await (await final.getFile()).text()!==snap.payload)throw new Error('Published backup read-back verification failed');
+    try{await saveToDir.removeEntry(stagingName)}catch(_){}
+    let retentionWarning='';
+    try{await pruneBrowserBackups(saveToDir,final,3)}catch(cleanupError){console.error('Backup saved but retention cleanup failed',cleanupError);retentionWarning='WARN:Backup saved and verified, but retention cleanup was incomplete. Check the folder; older backup files may remain.'}
+    bkDone(true,retentionWarning);return;
+   }catch(e){try{await saveToDir.removeEntry(stagingName)}catch(_){}throw e}
+  }
+  BKB=null;
+  const blob=new Blob([snap.payload],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=snap.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  toast('Backup download started. It is not marked verified until saved to a supported folder.');
+  if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render();
+ }catch(e){console.error('Backup snapshot failed',e);BKB=null;toast('Backup cancelled: '+(e&&e.message?e.message:'snapshot could not be verified'))}
 }
-function bkDone(ok,err){if(ok&&BKB){S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast('Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
+function bkDone(ok,err){if(ok&&BKB){S.bk.verified=true;S.bk.hash=BKB.h;S.bk.last=new Date().toISOString();S.bk.hist.unshift({n:BKB.nm,at:S.bk.last});S.bk.hist.length=Math.min(S.bk.hist.length,8);toast(err&&String(err).startsWith('WARN:')?String(err).slice(5):'Backup saved')}else if(!ok)toast('Backup failed. '+(err||'Check the folder.'));BKB=null;persist();if(S.sub==='backup'&&!$('#sh').classList.contains('show'))render()}
 function autoBackup(){if(S.bk.folder&&!BKB&&curHash()!==S.bk.hash)runBackup(true)}
 async function pickDir(){
  const requestId='bf'+Date.now();
@@ -794,7 +866,7 @@ async function pickDir(){
   try{
    const handle=await window.showDirectoryPicker({mode:'readwrite'});
    window.BKDIR=handle;
-   S.bk.folder=true;S.bk.label=handle.name||'Selected folder';
+   S.bk.folder=true;S.bk.verified=false;S.bk.label=handle.name||'Selected folder';
    persist();render();toast('Backup folder selected');autoBackup();return;
   }catch(e){
    if(e&&e.name==='AbortError')return;
@@ -811,6 +883,7 @@ window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{
  if(!pendingBackupFolderRequestId||String(id)!==String(pendingBackupFolderRequestId))return;
  pendingBackupFolderRequestId=null;
  S.bk.folder=!!ok;
+ if(ok)S.bk.verified=false;
  S.bk.label=msg||'';
  if(!ok){
   persist();render();
@@ -820,11 +893,65 @@ window.aureliaNativeBackupFolderResult=(id,ok,msg)=>{
  persist();render();toast('Backup folder ready');autoBackup();
 };
 window.aureliaNativeDeviceBackupResult=(id,ok,err)=>{if(!BKB||String(id)!==String(BKB.requestId))return;bkDone(ok,err)};
-window.aureliaNativeDeviceBackupStatusResult=(id,sel)=>{if(pendingBackupFolderRequestId&&String(id)!==String(pendingBackupFolderRequestId))return;S.bk.folder=!!sel;persist()};
+function requestNextAutomaticRecovery(){
+ const requestId='ar'+Date.now();AUTO_RECOVERY_REQUEST_ID=requestId;
+ if(nat({type:'recoverLatestBackup',requestId,exclude:AUTO_RECOVERY_EXCLUDED}))return true;
+ AUTO_RECOVERY_REQUEST_ID=null;return false;
+}
+window.aureliaNativeDeviceBackupStatusResult=(id,sel,backupExists)=>{
+ if(pendingBackupFolderRequestId&&String(id)!==String(pendingBackupFolderRequestId))return;
+ S.bk.folder=!!sel;
+ if(sel&&LOCAL_STATE_STATUS==='valid'&&!(backupExists&&S.bk.verified&&S.bk.hash===curHash()))S.bk.verified=false;
+ if(RECOVERY_CHECK_PENDING&&sel){
+  AUTO_RECOVERY_EXCLUDED=[];
+  if(requestNextAutomaticRecovery())return;
+  RECOVERY_CHECK_PENDING=false;persist();toast('Automatic recovery is unavailable. Use Restore from backup file.');
+  return;
+ }
+ if(RECOVERY_CHECK_PENDING&&!sel)RECOVERY_CHECK_PENDING=false;
+ persist();
+ if(sel&&LOCAL_STATE_STATUS==='valid')autoBackup();
+};
+window.aureliaNativeRecoveryBackupResult=async(id,ok,payload,fileName)=>{
+ if(!AUTO_RECOVERY_REQUEST_ID||String(id)!==String(AUTO_RECOVERY_REQUEST_ID))return;
+ AUTO_RECOVERY_REQUEST_ID=null;
+ if(!ok){
+  RECOVERY_CHECK_PENDING=false;persist();
+  toast('Automatic recovery could not find a readable backup. Use Restore from backup file.');
+  return;
+ }
+ try{
+  const raw=JSON.parse(payload);
+  if(!raw||raw.v!==4||!raw.data||!Array.isArray(raw.data.rooms)||!Array.isArray(raw.data.b)||!raw.data.set)throw new Error('Backup snapshot structure is invalid.');
+  if(raw.integrity){
+   if(raw.integrity.algorithm!=='SHA-256'||typeof raw.integrity.digest!=='string')throw new Error('Backup has an unsupported integrity checksum.');
+   const copy={...raw};delete copy.integrity;
+   if(await sha256Hex(JSON.stringify(copy))!==raw.integrity.digest)throw new Error('Backup checksum does not match its contents.');
+  }else console.warn('Recovering a legacy version-4 backup without an embedded checksum; structural and photo validation will be used.');
+  validatePhotoArchive(raw.data,raw.photoArchive||{});
+  S.rst={...raw.data,photoArchive:raw.photoArchive||{}};S.rstMode='snapshot';
+  RECOVERY_CHECK_PENDING=false;
+  const restored=await restoreGo();
+  if(restored===false&&fileName&&!AUTO_RECOVERY_EXCLUDED.includes(fileName)&&AUTO_RECOVERY_EXCLUDED.length<20){
+   AUTO_RECOVERY_EXCLUDED.push(fileName);RECOVERY_CHECK_PENDING=true;
+   if(requestNextAutomaticRecovery()){toast('Restore failed for the newest backup. Trying an older recovery point.');return}
+   RECOVERY_CHECK_PENDING=false;
+  }
+ }catch(e){
+  console.error('Automatic backup recovery failed',e);
+  if(fileName&&!AUTO_RECOVERY_EXCLUDED.includes(fileName)&&AUTO_RECOVERY_EXCLUDED.length<20){
+   AUTO_RECOVERY_EXCLUDED.push(fileName);
+   if(requestNextAutomaticRecovery()){toast('The newest backup failed validation. Trying an older recovery point.');return}
+  }
+  RECOVERY_CHECK_PENDING=false;persist();
+  toast('Automatic recovery failed: '+(e.message||'backup verification failed')+'. Use Restore from backup file.');
+ }
+};
 function restoreF(el){
  const f=el.files&&el.files[0];if(!f)return;
- f.text().then(t=>{
+ f.text().then(async t=>{
   const raw=JSON.parse(t);
+  if(raw&&raw.integrity){const meta=raw.integrity,copy={...raw};delete copy.integrity;if(meta.algorithm!=='SHA-256'||typeof meta.digest!=='string'||await sha256Hex(JSON.stringify(copy))!==meta.digest)throw new Error('Backup checksum does not match its contents.')}
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('The selected JSON file must contain an object.');
   const candidates=[raw,raw.data,raw.payload,raw.backup,raw.export,raw.records].filter(x=>x&&typeof x==='object'&&!Array.isArray(x));
   const arrays=x=>({
@@ -925,23 +1052,61 @@ async function restoreGo(){
   toast('JSON import: '+roomsAdded+' rooms, '+ga+' guests, '+ba+' bookings, '+expensesAdded+' expenses, '+inventoryAdded+' stock items; '+sk+' invalid/duplicate rows skipped.'+(roomsCreatedForBooking?' Created '+roomsCreatedForBooking+' placeholder room(s); review their room type and rate.':''));
   return;
  }
- // Full Aurelia backup: validate state and all referenced original photos before changing live records.
- if(!Array.isArray(d.rooms)||!Array.isArray(d.b)){toast('Backup is missing the room or booking list. Current data was not changed.');return}
+ // Full Aurelia backup: validate completely, retain rollback data, then commit.
+ if(!Array.isArray(d.rooms)||!Array.isArray(d.b)||!d.set||typeof d.set!=='object'){
+  toast('Backup is missing required application state. Current data was not changed.');return
+ }
  const sourceData=d,archive=d.photoArchive||{};
+ if(sourceData.integrity){
+  try{
+   const integrity=sourceData.integrity,copy={...sourceData};delete copy.integrity;
+   if(integrity.algorithm!=='SHA-256'||typeof integrity.digest!=='string'||await sha256Hex(JSON.stringify(copy))!==integrity.digest)throw new Error('Backup checksum does not match its contents.');
+  }catch(e){toast('Restore cancelled: '+(e.message||'backup integrity verification failed'));return}
+ }
  try{validatePhotoArchive(sourceData,archive)}catch(e){toast('Restore cancelled: '+e.message);return}
- try{if(Object.keys(archive).length)await photoRestore(archive)}catch(e){console.error('Photo archive restore failed',e);toast('Restore cancelled: original photos could not be restored. Current guest and booking records were not changed.');return}
  const restored={...d,rooms:d.rooms,b:d.b,g:Array.isArray(d.g)?d.g:[],t:Array.isArray(d.t)?d.t:[],exp:Array.isArray(d.exp)?d.exp:[],inv:Array.isArray(d.inv)?d.inv:[],aud:Array.isArray(d.aud)?d.aud:[],hist:Array.isArray(d.hist)?d.hist:[0,0,0,0,0,0]};
- const validBookings=[],invalidBookings=[];
- restored.b.forEach(x=>{const b=normaliseImportedBooking(x);if(b)validBookings.push(b);else invalidBookings.push(x)});
+ const validBookings=[];
+ for(const booking of restored.b){const normal=normaliseImportedBooking(booking);if(!normal){toast('Restore cancelled: a booking is invalid. Current data was not changed.');return}validBookings.push(normal)}
  restored.b=validBookings;
- DK.forEach(k=>{if(restored[k]!==undefined)S[k]=restored[k]});
- ['rooms','b','g','t','exp','inv','aud'].forEach(k=>{if(!Array.isArray(S[k]))S[k]=[]});
- id=Math.max(id,0,...S.b.map(b=>+b.id||0));
- S.rst=null;S.rstMode=null;persist();location.reload();
+ const liveBefore=cloneLiveSnapshot(),oldId=id;
+ let oldPhotos;
+ try{oldPhotos=await photoArchive()}catch(e){toast('Restore cancelled: could not create a rollback copy of current photos.');return}
+ try{
+  await photoRestore(archive);
+  const verifiedPhotos=await photoArchive();
+  validatePhotoArchive(restored,verifiedPhotos);
+  DK.forEach(k=>{if(restored[k]!==undefined)S[k]=restored[k]});
+  ['rooms','b','g','t','exp','inv','aud'].forEach(k=>{if(!Array.isArray(S[k]))throw new Error('Restored '+k+' data is invalid')});
+  id=Math.max(id,0,...S.b.map(b=>+b.id||0));
+  persist();
+  const saved=JSON.parse((window.__aureliaStorage||localStorage).getItem(SK)||'null');
+  if(!saved||DK.some(k=>JSON.stringify(saved[k])!==JSON.stringify(S[k])))throw new Error('Saved application state did not pass read-back verification.');
+  S.rst=null;S.rstMode=null;location.reload();return true;
+ }catch(e){
+  console.error('Transactional restore failed',e);
+  try{if(oldPhotos)await photoRestore(oldPhotos)}catch(photoRollbackError){console.error('Photo rollback failed',photoRollbackError)}
+  DK.forEach(k=>{if(liveBefore[k]!==undefined)S[k]=liveBefore[k]});id=oldId;
+  try{persist()}catch(rollbackError){console.error('State rollback failed',rollbackError)}
+  toast('Restore failed and rollback was attempted. Do not clear app data; check the backup and device storage.');return false;
+ }
 }
 const useMenu=m=>{Object.keys(MENU).forEach(k=>delete MENU[k]);Object.assign(MENU,m);S.menu=MENU};
-function persist(){try{const o={tab:S.tab,bk:S.bk};DK.forEach(k=>o[k]=S[k]);(window.__aureliaStorage||localStorage).setItem(SK,JSON.stringify(o))}catch(e){if(!S.qw){S.qw=1;toast('Device storage is full. Back up, then remove old items.')}}}
-function loadAll(){try{const o=JSON.parse((window.__aureliaStorage||localStorage).getItem(SK)||'null');if(!o)return;[...DK,'bk','tab'].forEach(k=>{if(o[k]!==undefined)S[k]=o[k]});useMenu(S.menu);S.aud.forEach(a=>a.at=new Date(a.at));S.led.forEach(l=>l[3]=new Date(l[3]));id=Math.max(id,...S.b.map(b=>b.id))}catch(e){}}
+function persist(){if(RECOVERY_CHECK_PENDING)return;try{const o={tab:S.tab,bk:S.bk};DK.forEach(k=>o[k]=S[k]);(window.__aureliaStorage||localStorage).setItem(SK,JSON.stringify(o))}catch(e){if(!S.qw){S.qw=1;toast('Device storage is full. Back up, then remove old items.')}}}
+let LOCAL_STATE_STATUS='missing',RECOVERY_CHECK_PENDING=false,AUTO_RECOVERY_REQUEST_ID=null,AUTO_RECOVERY_EXCLUDED=[];
+function loadAll(){
+ let raw=null;try{raw=(window.__aureliaStorage||localStorage).getItem(SK)}catch(e){LOCAL_STATE_STATUS='invalid';return}
+ if(!raw){LOCAL_STATE_STATUS='missing';return}
+ try{
+  const o=JSON.parse(raw);
+  if(!o||typeof o!=='object'||Array.isArray(o)||!Array.isArray(o.rooms)||!Array.isArray(o.b)||!Array.isArray(o.g)||!Array.isArray(o.t)||!Array.isArray(o.exp)||!Array.isArray(o.inv)||!Array.isArray(o.led)||!Array.isArray(o.aud)||!o.set||typeof o.set!=='object'||!o.menu||typeof o.menu!=='object')throw new Error('Saved application state is incomplete');
+  [...DK,'bk','tab'].forEach(k=>{if(o[k]!==undefined)S[k]=o[k]});
+  useMenu(S.menu);S.aud.forEach(a=>a.at=new Date(a.at));S.led.forEach(l=>l[3]=new Date(l[3]));id=Math.max(id,...S.b.map(b=>b.id));LOCAL_STATE_STATUS='valid';
+ }catch(e){
+  LOCAL_STATE_STATUS='invalid';
+  try{(window.__aureliaStorage||localStorage).setItem(SK+'_recovery_quarantine_'+Date.now(),raw)}catch(_){}
+  console.warn('Saved application state failed validation; recovery will be attempted.',e);
+ }
+}
 /* autopilot */
 
 function openGlobalSearch(){
@@ -1069,10 +1234,10 @@ SUB.rest=()=>hd('Restaurant business')+`<div class="grid g2"><div class="card"><
 DK.push('restaurant','tableGuests','tableRooms');
 
 /* start */
-loadAll();if(!window.AureliaNative)S.bk.folder=false;S.restaurant=Object.assign({name:'The Dining Room',phone:'',addr:'',tax:'',upi:'',cur:S.set.cur||'K',gst:0,qr:'',logo:''},S.restaurant||{});if(!S.restaurant.cur)S.restaurant.cur=S.set.cur||'K';S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};cleanTableOrders();useMenu(S.menu);syncT();
+loadAll();RECOVERY_CHECK_PENDING=!!window.AureliaNative&&LOCAL_STATE_STATUS!=='valid';if(!window.AureliaNative)S.bk.folder=false;S.restaurant=Object.assign({name:'The Dining Room',phone:'',addr:'',tax:'',upi:'',cur:S.set.cur||'K',gst:0,qr:'',logo:''},S.restaurant||{});if(!S.restaurant.cur)S.restaurant.cur=S.set.cur||'K';S.tableGuests=S.tableGuests||{};S.tableRooms=S.tableRooms||{};cleanTableOrders();useMenu(S.menu);syncT();
 const _r3=render;render=function(){try{if(!S||typeof S!=='object')throw new Error('Saved app state is unavailable');['rooms','b','g','t','exp','inv','aud','cancelled','financialLedger'].forEach(k=>{if(!Array.isArray(S[k]))S[k]=[]});if(!S.set||typeof S.set!=='object')S.set={name:'Aurelia',tag:'Peace, comfort and mindful hospitality.',cur:'K'};if(!S.au||typeof S.au!=='object')S.au={};if(!S.bk||typeof S.bk!=='object')S.bk={folder:false,label:'',last:null,hash:'',hist:[]};if(!Array.isArray(types))throw new Error('Room type data is unavailable');syncT();_r3();brand();persist()}catch(err){console.error('Aurelia startup/render wrapper failed',err);const v=$('#v');if(v)v.innerHTML='<div class="card" style="margin:24px;padding:20px"><h2>Recovery needed</h2><p class="lab">A saved setting or room record prevented the screen from loading. Your existing records have not been intentionally deleted. Use Backup/Restore before clearing app data.</p><button class="btn" onclick="location.reload()">Reload app</button><button class="btn ghost" onclick="S.tab=\'more\';S.sub=\'backup\';location.reload()">Open backup after reload</button></div>'}};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)auto()});setInterval(auto,60000);
-nat({type:'deviceBackupStatus',requestId:'bs'+Date.now()});
+nat({type:'deviceBackupStatus',requestId:'bs'+Date.now(),hash:curHash()});
 render();auto();
 
 

@@ -80,6 +80,7 @@ import android.content.pm.PackageManager;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.provider.DocumentsContract;
+import android.database.Cursor;
 import android.util.Base64;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -91,7 +92,11 @@ import android.webkit.JavascriptInterface;
 import org.json.JSONObject;
 import com.getcapacitor.BridgeActivity;
 import java.io.OutputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends BridgeActivity {
   private static final int PICK_BACKUP_FOLDER = 7101;
@@ -103,6 +108,7 @@ public class MainActivity extends BridgeActivity {
   private byte[] pendingBytes = new byte[0];
   private boolean pendingIsBackup = false;
   private SharedPreferences prefs;
+  private final ExecutorService backupExecutor = Executors.newSingleThreadExecutor();
 
   @Override public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -122,22 +128,200 @@ public class MainActivity extends BridgeActivity {
   private void backupResult(String id, boolean ok, String error) {
     js("window.aureliaNativeDeviceBackupResult && window.aureliaNativeDeviceBackupResult(" + q(id) + "," + ok + "," + q(error) + ")");
   }
+  private void recoveryResult(String id, boolean ok, String payload, String fileName) {
+    js("window.aureliaNativeRecoveryBackupResult && window.aureliaNativeRecoveryBackupResult(" + q(id) + "," + ok + "," + q(payload) + "," + q(fileName) + ")");
+  }
+  private boolean hasBackupForHash(String dataHash) throws Exception {
+    String saved = prefs.getString("backup_tree_uri", "");
+    if (saved.isEmpty()) return false;
+    Uri tree = Uri.parse(saved);
+    Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+    String[] projection = { DocumentsContract.Document.COLUMN_DISPLAY_NAME };
+    try (Cursor cursor = getContentResolver().query(children, projection, null, null, null)) {
+      if (cursor == null) throw new IllegalStateException("The selected backup folder cannot be read.");
+      int nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+      while (cursor.moveToNext()) {
+        String name = cursor.getString(nameCol);
+        if (name != null && name.startsWith("aurelia-backup-") && name.endsWith("-" + dataHash + ".json")) return true;
+      }
+    }
+    return false;
+  }
+  private JSONObject readLatestBackupFromSelectedFolder(String excludedJson) throws Exception {
+    String saved = prefs.getString("backup_tree_uri", "");
+    if (saved.isEmpty()) throw new IllegalStateException("No backup folder is selected.");
+    java.util.HashSet<String> excluded = new java.util.HashSet<>();
+    try { org.json.JSONArray values = new org.json.JSONArray(excludedJson == null ? "[]" : excludedJson); for (int i = 0; i < values.length(); i++) excluded.add(values.optString(i)); } catch (Exception ignored) { }
+    Uri tree = Uri.parse(saved);
+    Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+    String[] projection = { DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_LAST_MODIFIED };
+    Uri latest = null; String latestName = null; long latestModified = Long.MIN_VALUE;
+    try (Cursor cursor = getContentResolver().query(children, projection, null, null, null)) {
+      if (cursor == null) throw new IllegalStateException("The selected backup folder cannot be read.");
+      int idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
+      int nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+      int modifiedCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
+      while (cursor.moveToNext()) {
+        String name = cursor.getString(nameCol);
+        if (name == null || !name.startsWith("aurelia-backup-") || !name.endsWith(".json") || excluded.contains(name)) continue;
+        long modified = modifiedCol >= 0 && !cursor.isNull(modifiedCol) ? cursor.getLong(modifiedCol) : 0L;
+        if (latest == null || modified > latestModified) {
+          latestModified = modified; latestName = name;
+          latest = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(idCol));
+        }
+      }
+    }
+    if (latest == null) throw new IllegalStateException("No additional Aurelia backup file was found in the selected folder.");
+    JSONObject result = new JSONObject();
+    result.put("name", latestName);
+    result.put("payload", new String(readDocument(latest), StandardCharsets.UTF_8));
+    return result;
+  }
 
-  private boolean writeToSelectedFolder(String name, String payload) {
+  private static String sha256(byte[] bytes) throws Exception {
+    byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+    StringBuilder out = new StringBuilder();
+    for (byte b : digest) out.append(String.format(java.util.Locale.ROOT, "%02x", b & 0xff));
+    return out.toString();
+  }
+  private byte[] readDocument(Uri uri) throws Exception {
+    try (InputStream in = getContentResolver().openInputStream(uri);
+         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+      if (in == null) throw new IllegalStateException("Could not read saved backup for verification");
+      byte[] buffer = new byte[16384]; int count;
+      while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+      return out.toByteArray();
+    }
+  }
+  private void writeDocument(Uri uri, byte[] bytes) throws Exception {
+    try (OutputStream out = getContentResolver().openOutputStream(uri, "wt")) {
+      if (out == null) throw new IllegalStateException("Could not open backup destination");
+      out.write(bytes); out.flush();
+    }
+  }
+  private static final class BackupCandidate {
+    final Uri uri;
+    final long modified;
+    final boolean valid;
+    final boolean protectedNew;
+    BackupCandidate(Uri uri, long modified, boolean valid, boolean protectedNew) {
+      this.uri = uri; this.modified = modified; this.valid = valid; this.protectedNew = protectedNew;
+    }
+  }
+
+  private boolean isManagedBackupName(String name) {
+    return name != null && name.matches("^aurelia-backup-.*\\.json$");
+  }
+
+  private boolean isStructurallyValidBackup(byte[] bytes) {
+    try {
+      JSONObject backup = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+      JSONObject data = backup.optJSONObject("data");
+      if (backup.optInt("v", -1) != 4 || data == null
+          || data.optJSONArray("rooms") == null || data.optJSONArray("b") == null
+          || data.optJSONObject("set") == null) return false;
+      JSONObject archive = backup.optJSONObject("photoArchive");
+      if (archive != null) {
+        java.util.Iterator<String> keys = archive.keys();
+        while (keys.hasNext()) {
+          String key = keys.next();
+          String value = archive.optString(key, "");
+          if (key.isEmpty() || !value.matches("(?i)^data:image/.*")) return false;
+        }
+      }
+      JSONObject integrity = backup.optJSONObject("integrity");
+      if (integrity != null) {
+        if (!"SHA-256".equals(integrity.optString("algorithm", ""))
+            || !integrity.optString("digest", "").matches("(?i)^[a-f0-9]{64}$")) return false;
+      }
+      return true;
+    } catch (Exception invalid) {
+      return false;
+    }
+  }
+
+  /**
+   * Retain the three newest structurally valid managed backups. The just-written,
+   * read-back-verified backup is pinned so provider timestamp quirks cannot evict it.
+   * Only Aurelia backup JSON files are eligible; unrelated files are never touched.
+   */
+  private void pruneBackupFilesToRetention(Uri root, Uri protectedNew, int maximum) throws Exception {
+    Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(
+        root, DocumentsContract.getDocumentId(root));
+    String[] projection = {
+      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+      DocumentsContract.Document.COLUMN_LAST_MODIFIED
+    };
+    java.util.ArrayList<BackupCandidate> candidates = new java.util.ArrayList<>();
+    try (Cursor cursor = getContentResolver().query(children, projection, null, null, null)) {
+      if (cursor == null) throw new IllegalStateException("Could not list the selected backup folder for retention.");
+      int idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
+      int nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+      int modifiedCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
+      while (cursor.moveToNext()) {
+        String name = cursor.getString(nameCol);
+        if (!isManagedBackupName(name)) continue;
+        Uri fileUri = DocumentsContract.buildDocumentUriUsingTree(root, cursor.getString(idCol));
+        long modified = modifiedCol >= 0 && !cursor.isNull(modifiedCol) ? cursor.getLong(modifiedCol) : 0L;
+        boolean protectedFile = fileUri.equals(protectedNew);
+        boolean valid = isStructurallyValidBackup(readDocument(fileUri));
+        candidates.add(new BackupCandidate(fileUri, modified, valid, protectedFile));
+      }
+    }
+    candidates.sort((a, b) -> {
+      if (a.protectedNew != b.protectedNew) return a.protectedNew ? -1 : 1;
+      if (a.valid != b.valid) return a.valid ? -1 : 1;
+      return Long.compare(b.modified, a.modified);
+    });
+    int retainedValid = 0;
+    Exception deletionFailure = null;
+    for (BackupCandidate candidate : candidates) {
+      boolean keep = candidate.valid && retainedValid < maximum;
+      if (keep) { retainedValid++; continue; }
+      try {
+        if (!DocumentsContract.deleteDocument(getContentResolver(), candidate.uri)) {
+          throw new IllegalStateException("The storage provider refused to remove an obsolete backup.");
+        }
+      } catch (Exception e) {
+        if (deletionFailure == null) deletionFailure = e;
+        else deletionFailure.addSuppressed(e);
+      }
+    }
+    if (deletionFailure != null) throw new IllegalStateException(
+        "Backup was saved, but one or more obsolete backup files could not be removed.", deletionFailure);
+  }
+
+  private String writeToSelectedFolder(String name, String payload, String requestId) {
     String saved = prefs.getString("backup_tree_uri", null);
-    if (saved == null || saved.isEmpty()) return false;
+    if (saved == null || saved.isEmpty()) return "No backup folder permission is saved.";
     Uri tree = Uri.parse(saved);
     Uri root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+    byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
+    Uri stage = null, published = null;
+    String stageName = name + ".staging-" + requestId.replaceAll("[^A-Za-z0-9_-]", "") + ".tmp";
     try {
-      Uri file = DocumentsContract.createDocument(getContentResolver(), root, "application/json", name);
-      if (file == null) return false;
-      try (OutputStream out = getContentResolver().openOutputStream(file, "wt")) {
-        if (out == null) return false;
-        out.write(payload.getBytes(StandardCharsets.UTF_8));
-        out.flush();
-        return true;
+      stage = DocumentsContract.createDocument(getContentResolver(), root, "application/json", stageName);
+      if (stage == null) throw new IllegalStateException("Could not create staging backup in the selected folder.");
+      writeDocument(stage, bytes);
+      if (!sha256(bytes).equals(sha256(readDocument(stage)))) throw new IllegalStateException("Staging backup failed SHA-256 read-back verification.");
+      published = DocumentsContract.createDocument(getContentResolver(), root, "application/json", name);
+      if (published == null) throw new IllegalStateException("Could not publish the verified backup.");
+      writeDocument(published, bytes);
+      if (!sha256(bytes).equals(sha256(readDocument(published)))) throw new IllegalStateException("Published backup failed SHA-256 read-back verification.");
+      try { DocumentsContract.deleteDocument(getContentResolver(), stage); } catch (Exception ignored) { }
+      try {
+        pruneBackupFilesToRetention(root, published, 3);
+        return null;
+      } catch (Exception cleanupError) {
+        android.util.Log.e("AureliaBackup", "Backup is verified, but retention cleanup failed", cleanupError);
+        return "WARN:Backup saved and verified, but retention cleanup was incomplete. Check the folder; older backup files may remain.";
       }
-    } catch (Exception e) { return false; }
+    } catch (Exception e) {
+      if (published != null) try { DocumentsContract.deleteDocument(getContentResolver(), published); } catch (Exception ignored) { }
+      if (stage != null) try { DocumentsContract.deleteDocument(getContentResolver(), stage); } catch (Exception ignored) { }
+      return e.getMessage() == null ? "Backup write or verification failed." : e.getMessage();
+    }
   }
   private void saveDocument(String id, String name, String mime, byte[] bytes, boolean isBackup) {
     pendingFileRequestId = id == null ? "" : id;
@@ -216,10 +400,12 @@ public class MainActivity extends BridgeActivity {
 
   private class AureliaBridge {
     @JavascriptInterface public void postMessage(String raw) {
+      String operationType = "", operationRequestId = "";
       try {
         JSONObject obj = new JSONObject(raw);
-        String type = obj.optString("type", "");
-        String requestId = obj.optString("requestId", "");
+        final String type = obj.optString("type", "");
+        final String requestId = obj.optString("requestId", "");
+        operationType = type; operationRequestId = requestId;
         if ("photoStore".equals(type)) {
           String key = obj.optString("key", "");
           String data = obj.optString("data", "");
@@ -242,13 +428,56 @@ public class MainActivity extends BridgeActivity {
         } else if ("photoRestore".equals(type)) {
           JSONObject archive = obj.optJSONObject("archive");
           if (archive == null) throw new IllegalArgumentException("Invalid photo archive");
-          java.util.Iterator<String> keys = archive.keys();
-          while (keys.hasNext()) {
-            String key = keys.next(), data = archive.optString(key, "");
-            if (!data.startsWith("data:image/")) throw new IllegalArgumentException("Invalid archived image");
-            writeText(photoFile(key), data);
+          java.util.LinkedHashMap<String, String> incoming = new java.util.LinkedHashMap<>();
+          java.util.LinkedHashMap<String, String> previous = new java.util.LinkedHashMap<>();
+          java.util.LinkedHashMap<String, java.io.File> staged = new java.util.LinkedHashMap<>();
+          java.io.File archiveDir = photoDir();
+          java.io.File[] existingPhotos = archiveDir.listFiles((dir, name) -> name.endsWith(".txt"));
+          if (existingPhotos != null) for (java.io.File existing : existingPhotos) previous.put(existing.getName().substring(0, existing.getName().length() - 4), readText(existing));
+          java.io.File stageDir = new java.io.File(archiveDir, ".restore-" + System.currentTimeMillis());
+          if (!stageDir.mkdirs()) throw new IllegalStateException("Could not create photo restore staging area");
+          try {
+            java.util.Iterator<String> keys = archive.keys();
+            while (keys.hasNext()) {
+              String key = keys.next(), data = archive.optString(key, "");
+              if (key == null || !key.matches("[A-Za-z0-9_-]{1,120}") || !data.startsWith("data:image/")) throw new IllegalArgumentException("Invalid archived image or photo key");
+              incoming.put(key, data);
+              java.io.File temp = new java.io.File(stageDir, key + ".txt");
+              writeText(temp, data);
+              if (!data.equals(readText(temp))) throw new IllegalStateException("Staged photo verification failed for " + key);
+              staged.put(key, temp);
+            }
+            for (java.util.Map.Entry<String, java.io.File> entry : staged.entrySet()) {
+              String data = readText(entry.getValue());
+              writeText(photoFile(entry.getKey()), data);
+              if (!data.equals(readText(photoFile(entry.getKey())))) throw new IllegalStateException("Restored photo verification failed for " + entry.getKey());
+            }
+            java.io.File[] currentPhotos = archiveDir.listFiles((dir, name) -> name.endsWith(".txt"));
+            if (currentPhotos != null) for (java.io.File current : currentPhotos) {
+              String key = current.getName().substring(0, current.getName().length() - 4);
+              if (!incoming.containsKey(key) && !current.delete()) throw new IllegalStateException("Could not remove photo absent from restored archive: " + key);
+            }
+            java.io.File[] verifiedPhotos = archiveDir.listFiles((dir, name) -> name.endsWith(".txt"));
+            int verifiedCount = verifiedPhotos == null ? 0 : verifiedPhotos.length;
+            if (verifiedCount != incoming.size()) throw new IllegalStateException("Restored photo archive count does not match the backup.");
+            photoResult(requestId, true, "restored");
+          } catch (Exception restoreError) {
+            Exception rollbackError = null;
+            for (java.util.Map.Entry<String, String> entry : previous.entrySet()) {
+              try { writeText(photoFile(entry.getKey()), entry.getValue()); }
+              catch (Exception e) { rollbackError = e; }
+            }
+            for (String key : incoming.keySet()) if (!previous.containsKey(key)) {
+              try { java.io.File target = photoFile(key); if (target.exists() && !target.delete()) throw new IllegalStateException("Could not remove partially restored photo " + key); }
+              catch (Exception e) { rollbackError = e; }
+            }
+            if (rollbackError != null) throw new IllegalStateException("Photo restore failed and rollback was incomplete: " + rollbackError.getMessage(), restoreError);
+            throw restoreError;
+          } finally {
+            java.io.File[] stagedFiles = stageDir.listFiles();
+            if (stagedFiles != null) for (java.io.File stagedFile : stagedFiles) try { stagedFile.delete(); } catch (Exception ignored) { }
+            try { stageDir.delete(); } catch (Exception ignored) { }
           }
-          photoResult(requestId, true, "restored");
         } else if ("requestCameraPermission".equals(type)) {
           runOnUiThread(() -> {
             cameraPermissionRequestId = requestId;
@@ -288,19 +517,34 @@ public class MainActivity extends BridgeActivity {
               recognizer.close();
             });
         } else if ("deviceBackupStatus".equals(type)) {
-          boolean selected = !prefs.getString("backup_tree_uri", "").isEmpty();
-          js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + "," + selected + ")");
-        } else if ("backupDeviceNow".equals(type)) {
-          String name = obj.optString("name", "aurelia-backup.json");
-          String payload = obj.optString("payload", "");
-          runOnUiThread(() -> {
-            if (prefs.getString("backup_tree_uri", "").isEmpty()) {
-              saveDocument(requestId, name, "application/json", payload.getBytes(StandardCharsets.UTF_8), true);
-            } else {
-              boolean ok = writeToSelectedFolder(name, payload);
-              backupResult(requestId, ok, ok ? "" : "Could not write backup to selected folder.");
-            }
+          boolean selected = false, backupExists = false;
+          try {
+            selected = !prefs.getString("backup_tree_uri", "").isEmpty();
+            if (selected) backupExists = hasBackupForHash(obj.optString("hash", ""));
+          } catch (Exception folderError) { selected = false; backupExists = false; }
+          final boolean folderSelected = selected, matchingBackupExists = backupExists;
+          js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(requestId) + "," + folderSelected + "," + matchingBackupExists + ")");
+        } else if ("recoverLatestBackup".equals(type)) {
+          final String excluded = obj.optJSONArray("exclude") == null ? "[]" : obj.optJSONArray("exclude").toString();
+          backupExecutor.execute(() -> {
+            try {
+              JSONObject result = readLatestBackupFromSelectedFolder(excluded);
+              recoveryResult(requestId, true, result.optString("payload", ""), result.optString("name", ""));
+            } catch (Exception e) { recoveryResult(requestId, false, e.getMessage() == null ? "Could not read a backup from the selected folder." : e.getMessage(), ""); }
           });
+        } else if ("backupDeviceNow".equals(type)) {
+          final String name = obj.optString("name", "aurelia-backup.json");
+          final String payload = obj.optString("payload", "");
+          final String folderUri = prefs.getString("backup_tree_uri", "");
+          if (folderUri.isEmpty()) {
+            runOnUiThread(() -> saveDocument(requestId, name, "application/json", payload.getBytes(StandardCharsets.UTF_8), true));
+          } else {
+            backupExecutor.execute(() -> {
+              String error = writeToSelectedFolder(name, payload, requestId);
+              boolean saved = error == null || error.startsWith("WARN:");
+              backupResult(requestId, saved, error == null ? "" : error);
+            });
+          }
         } else if ("openUrl".equals(type)) {
           String url = obj.optString("url", "");
           runOnUiThread(() -> { try { Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url)); startActivity(intent); } catch (Exception e) { js("window.aureliaNativeActionResult && window.aureliaNativeActionResult(" + q(requestId) + ",false," + q("Could not open link") + ")"); } });
@@ -322,7 +566,13 @@ public class MainActivity extends BridgeActivity {
           String mime = obj.optString("mime", "application/octet-stream");
           runOnUiThread(() -> saveDocument(requestId, name, mime, bytes, false));
         }
-      } catch (Exception ignored) { }
+      } catch (Exception error) {
+        String message = error.getMessage() == null ? "Native backup operation failed." : error.getMessage();
+        if ("photoStore".equals(operationType) || "photoLoad".equals(operationType) || "photoArchive".equals(operationType) || "photoRestore".equals(operationType)) photoResult(operationRequestId, false, message);
+        else if ("backupDeviceNow".equals(operationType)) backupResult(operationRequestId, false, message);
+        else if ("recoverLatestBackup".equals(operationType)) recoveryResult(operationRequestId, false, message, "");
+        else if ("deviceBackupStatus".equals(operationType)) js("window.aureliaNativeDeviceBackupStatusResult && window.aureliaNativeDeviceBackupStatusResult(" + q(operationRequestId) + ",false)");
+      }
     }
   }
 
@@ -348,21 +598,27 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) { folderResult(folderRequestId, false, "Could not retain access to selected folder"); }
       } else folderResult(folderRequestId, false, "No folder selected");
     } else if (requestCode == CREATE_BACKUP_FILE) {
-      if (resultCode == RESULT_OK && data != null && data.getData() != null) {
-        try (OutputStream out = getContentResolver().openOutputStream(data.getData(), "wt")) {
-          if (out == null) throw new IllegalStateException("Could not open selected file");
-          out.write(pendingBytes);
-          out.flush();
-          if (pendingIsBackup) backupResult(pendingFileRequestId, true, "");
-          else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",true,'')");
-        } catch (Exception e) {
-          if (pendingIsBackup) backupResult(pendingFileRequestId, false, e.getMessage());
-          else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",false," + q(e.getMessage()) + ")");
-        }
-      } else if (pendingIsBackup) backupResult(pendingFileRequestId, false, "Save cancelled");
-      else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(pendingFileRequestId) + ",false,'Save cancelled')");
+      final String completedId = pendingFileRequestId;
+      final boolean isBackup = pendingIsBackup;
+      final byte[] expected = pendingBytes;
       pendingBytes = new byte[0];
       pendingIsBackup = false;
+      if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+        final Uri destination = data.getData();
+        backupExecutor.execute(() -> {
+          try {
+            writeDocument(destination, expected);
+            if (isBackup && !sha256(expected).equals(sha256(readDocument(destination)))) throw new IllegalStateException("Saved backup failed SHA-256 read-back verification.");
+            if (isBackup) backupResult(completedId, true, "");
+            else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(completedId) + ",true,'')");
+          } catch (Exception e) {
+            String message = e.getMessage() == null ? "Could not save or verify the selected file." : e.getMessage();
+            if (isBackup) backupResult(completedId, false, message);
+            else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(completedId) + ",false," + q(message) + ")");
+          }
+        });
+      } else if (isBackup) backupResult(completedId, false, "Save cancelled");
+      else js("window.aureliaNativeFileSaveResult && window.aureliaNativeFileSaveResult(" + q(completedId) + ",false,'Save cancelled')");
     }
   }
 }
