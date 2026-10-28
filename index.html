@@ -544,7 +544,7 @@ const idMissing=g=>{if(!g)return'the guest profile is missing';if(!g.idn||!g.img
 function brand(){const s=S.set;document.title=s.name;$('#crest').innerHTML=(s.logo?`<img src="${s.logo}" alt="" style="width:34px;height:34px;border-radius:10px;object-fit:cover">`:'<svg viewBox="0 0 32 32"><path d="M16 3l3 7 7 1-5 5 1 8-6-4-6 4 1-8-5-5 7-1z"/></svg>')+`<span class="foil">${esc(s.name.toUpperCase())}</span>`}
 /* payments */
 function addPay(b,a,m,r,auto){(b.pays=b.pays||[]).push({a,m,r,at:new Date().toISOString(),auto:!!auto});b.p=paid(b);S.today+=a;aud(auto?'Auto payment':'Payment',K(a)+' by '+m+' · Room '+b.room+(r?' · ref '+r:''))}
-const mchips=id=>`<div class="chips" id="${id}">${PM.map((p,k)=>`<button class="chip ${k?'':'on'}" onclick="$$('#${id} .chip').forEach(c=>c.classList.remove('on'));this.classList.add('on')">${p}</button>`).join('')}</div>`;
+let mchips=id=>`<div class="chips" id="${id}">${PM.map((p,k)=>`<button class="chip ${k?'':'on'}" onclick="$$('#${id} .chip').forEach(c=>c.classList.remove('on'));this.classList.add('on')">${p}</button>`).join('')}</div>`;
 const payForm=(d,i)=>`<label class="fld"><span>Payment amount</span><input id="pa" type="number" value="${d}"></label>${mchips('pm')}<label class="fld"><span>Transaction reference</span><input id="pr"></label><label class="fld"><input id="pc" type="checkbox">I checked that the money has arrived</label><button class="btn" style="width:100%" onclick="pay(${i})">Record payment</button>`;
 function folio(i){const b=bk(i),d=dueB(b);openS(`<h2 class="foil">${esc(b.g)}</h2><div class="lab">Folio · Room ${b.room}<br>
 Stay ${fd(b.in)} → ${fd(b.out)}
